@@ -27,6 +27,7 @@ export default function ItemEditScreen() {
   // Wait for the item (or the default buffer for a new item) before building the form.
   if (isNew ? settings.isLoading : existing.isLoading) return <Text style={styles.loading}>Loading…</Text>;
   const item = existing.data[0];
+  if (!isNew && existing.error) return <Text style={styles.loading}>Could not load item: {existing.error.message}</Text>;
   if (!isNew && !item) return <Text style={styles.loading}>Item not found.</Text>;
 
   const initial = isNew

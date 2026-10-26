@@ -43,7 +43,7 @@ export const emptyItemForm: ItemForm = {
 export function parseDecimal(s: string): number | null | 'invalid' {
   const t = s.trim().replace(',', '.');
   if (t === '') return null;
-  return /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : 'invalid';
+  return /^-?(\d+\.?\d*|\.\d+)$/.test(t) ? Number(t) : 'invalid';
 }
 
 export function validateItem(
@@ -59,8 +59,8 @@ export function validateItem(
 
   const cap = parseDecimal(f.maxMonthsCover);
   if (typeof cap !== 'number' || cap <= 0) errors.maxMonthsCover = 'Cap must be more than 0 months';
-  else if (typeof buffer === 'number' && !errors.bufferPct && cap < 1 + buffer / 100)
-    errors.maxMonthsCover = `Cap must be at least ${1 + buffer / 100} months to cover the ${buffer}% buffer`;
+  else if (typeof buffer === 'number' && !errors.bufferPct && cap < (100 + buffer) / 100)
+    errors.maxMonthsCover = `Cap must be at least ${(100 + buffer) / 100} months to cover the ${buffer}% buffer`;
 
   const est = parseDecimal(f.estMonthlyUsage);
   if (est === 'invalid' || (est !== null && est < 0)) errors.estMonthlyUsage = 'Estimate must be blank or 0 or more';
