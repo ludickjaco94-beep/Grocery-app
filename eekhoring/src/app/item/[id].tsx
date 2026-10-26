@@ -14,6 +14,7 @@ import {
   type ItemForm,
   type ItemValues,
 } from '@/items/itemRules';
+import { createGuard } from '@/lib/guard';
 
 type ItemRow = ItemValues & { id: string; active: number };
 
@@ -41,13 +42,16 @@ function ItemEditForm({ id, item, initial }: { id: string; item?: ItemRow; initi
   const [form, setForm] = useState(initial);
   const [errors, setErrors] = useState<Partial<Record<keyof ItemForm, string>>>({});
 
+  const [guard] = useState(() => createGuard((e) => Alert.alert('Could not save', String(e))));
+
   const set = <K extends keyof ItemForm>(key: K, value: ItemForm[K]) => setForm({ ...form, [key]: value });
 
-  async function save(values: ItemValues) {
-    if (isNew) await createItem(values);
-    else await updateItem(id, values);
-    router.back();
-  }
+  const save = (values: ItemValues) =>
+    guard.run(async () => {
+      if (isNew) await createItem(values);
+      else await updateItem(id, values);
+      router.back();
+    });
 
   function onSave() {
     const result = validateItem(form);
@@ -61,10 +65,11 @@ function ItemEditForm({ id, item, initial }: { id: string; item?: ItemRow; initi
     ]);
   }
 
-  async function onToggleArchive() {
-    await setItemActive(id, !item!.active);
-    router.back();
-  }
+  const onToggleArchive = () =>
+    guard.run(async () => {
+      await setItemActive(id, !item!.active);
+      router.back();
+    });
 
   const field = (key: keyof ItemForm, label: string, decimal = false, hint?: string) => (
     <View style={styles.field}>
