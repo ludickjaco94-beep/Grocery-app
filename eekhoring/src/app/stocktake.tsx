@@ -3,10 +3,10 @@ import { router, Stack, usePreventRemove } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { parseDecimal, type Unit } from '@/items/itemRules';
+import { type Unit } from '@/items/itemRules';
 import { createGuard } from '@/lib/guard';
 import { CURRENT_STOCK_SQL, KG_PER_PACK_SQL, saveStockTake } from '@/stock/stockRepo';
-import { buildStockTake, NO_PACK_DATA, roundQty, stepFor, usageWindowStart } from '@/stock/stockRules';
+import { buildStockTake, bumpCount, NO_PACK_DATA, stepFor, usageWindowStart } from '@/stock/stockRules';
 
 type ItemRow = { id: string; name: string; unit: Unit; category: string; sold_by_weight: number; quantity: number | null };
 type Entry = { text: string; packs: boolean };
@@ -29,21 +29,15 @@ export default function StockTakeScreen() {
 }
 
 function StockTakeForm({ items, kgPerPack }: { items: ItemRow[]; kgPerPack: Map<string, number> }) {
-  const [initial] = useState(() =>
-    Object.fromEntries(items.map((i) => [i.id, { text: i.quantity === null ? '' : String(i.quantity), packs: false }]))
-  );
-  const [entries, setEntries] = useState<Record<string, Entry>>(initial);
+  // Rows start blank (last count shown greyed): only rows the owner actually touches are saved.
+  const [entries, setEntries] = useState<Record<string, Entry>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
   const [guard] = useState(() => createGuard((e) => Alert.alert('Could not save', String(e))));
 
   const entry = (id: string) => entries[id] ?? { text: '', packs: false };
   const set = (id: string, e: Entry) => setEntries((all) => ({ ...all, [id]: e }));
-  const dirty = items.some((i) => {
-    const a = entry(i.id);
-    const b = initial[i.id] ?? { text: '', packs: false };
-    return a.text !== b.text || a.packs !== b.packs;
-  });
+  const dirty = Object.values(entries).some((e) => e.text !== '' || e.packs);
 
   usePreventRemove(dirty && !saved, ({ repeat }) =>
     Alert.alert('Discard this stock-take?', undefined, [
@@ -60,10 +54,8 @@ function StockTakeForm({ items, kgPerPack }: { items: ItemRow[]; kgPerPack: Map<
 
   function bump(item: ItemRow, sign: 1 | -1) {
     const e = entry(item.id);
-    const n = parseDecimal(e.text);
-    const base = typeof n === 'number' ? n : 0;
-    const step = e.packs ? 1 : stepFor(item.unit);
-    set(item.id, { ...e, text: String(Math.max(0, roundQty(base + sign * step))) });
+    // The last count is in kg, so it is no starting point for a packs count.
+    set(item.id, { ...e, text: bumpCount(e.text, e.packs ? null : item.quantity, e.packs ? 1 : stepFor(item.unit), sign) });
   }
 
   const onSave = () =>
@@ -80,7 +72,7 @@ function StockTakeForm({ items, kgPerPack }: { items: ItemRow[]; kgPerPack: Map<
       await saveStockTake(result.entries);
       setSaved(true);
       const { entries: counts, skipped } = result;
-      Alert.alert('Saved', `${counts.length} counts saved${skipped ? `, ${skipped} blank skipped` : ''}`, [
+      Alert.alert('Saved', `${counts.length} counts saved${skipped ? `, ${skipped} not counted` : ''}`, [
         { text: 'OK', onPress: () => router.back() },
       ]);
     });
@@ -109,6 +101,8 @@ function StockTakeForm({ items, kgPerPack }: { items: ItemRow[]; kgPerPack: Map<
                   style={[styles.input, errors[item.id] && styles.inputError]}
                   value={e.text}
                   onChangeText={(text) => set(item.id, { ...e, text })}
+                  placeholder={e.packs || item.quantity === null ? '' : String(item.quantity)}
+                  placeholderTextColor="#999"
                   keyboardType="decimal-pad"
                   accessibilityLabel={`Count of ${item.name}`}
                 />

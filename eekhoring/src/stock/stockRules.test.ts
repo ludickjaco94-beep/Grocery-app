@@ -1,4 +1,4 @@
-import { applyAdjustment, buildStockTake, usageWindowStart, withChanges, type CountRow } from './stockRules';
+import { applyAdjustment, buildStockTake, bumpCount, usageWindowStart, withChanges, type CountRow } from './stockRules';
 
 const row = (o: Partial<CountRow>): CountRow => ({ itemId: 'a', text: '', packs: false, kgPerPack: null, ...o });
 
@@ -54,4 +54,13 @@ test('withChanges is newest first with the change from the row before', () => {
     ['2', 2],
     ['1', null],
   ]);
+});
+
+test('bumpCount starts a blank row from the last count', () => {
+  expect(bumpCount('', 3, 1, 1)).toBe('4');
+  expect(bumpCount('', 3, 1, -1)).toBe('2');
+  expect(bumpCount('', null, 0.5, 1)).toBe('0.5');
+  expect(bumpCount('2,5', 3, 0.5, 1)).toBe('3');
+  expect(bumpCount('0', 3, 1, -1)).toBe('0');
+  expect(bumpCount('0.1', null, 0.2, 1)).toBe('0.3');
 });

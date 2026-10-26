@@ -31,6 +31,13 @@ export function buildStockTake(
   return Object.keys(errors).length ? { ok: false, errors } : { ok: true, entries, skipped };
 }
 
+// A blank row shows the last count greyed out; + / − start from it so "one less than last time" is one tap.
+export function bumpCount(text: string, last: number | null, step: number, sign: 1 | -1): string {
+  const n = parseDecimal(text);
+  const base = n === null ? (last ?? 0) : n === 'invalid' ? 0 : n;
+  return String(Math.max(0, roundQty(base + sign * step)));
+}
+
 export function applyAdjustment(current: number, delta: number): number | { error: string } {
   const next = roundQty(current + delta);
   return next < 0 ? { error: `You only have ${current}. You cannot remove ${-delta}.` } : next;
