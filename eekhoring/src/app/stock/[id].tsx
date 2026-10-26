@@ -1,16 +1,21 @@
 import { useQuery } from '@powersync/react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, FlatList, Text, TextInput, View } from 'react-native';
 
+import { PrimaryButton } from '@/components/PrimaryButton';
+import { Screen } from '@/components/Screen';
 import { parseDecimal } from '@/items/itemRules';
 import { createGuard } from '@/lib/guard';
 import { adjustStock } from '@/stock/stockRepo';
 import { withChanges, type HistoryRow } from '@/stock/stockRules';
+import { font, radius } from '@/theme/theme';
+import { useTheme } from '@/theme/useTheme';
 
 const LABELS: Record<string, string> = { stocktake: 'Stock-take', adjustment: 'Adjusted', purchase: 'Bought' };
 
 export default function ItemStockScreen() {
+  const t = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const item = useQuery<{ name: string; unit: string }>('SELECT name, unit FROM items WHERE id = ?', [id]);
   const history = useQuery<HistoryRow>(
@@ -41,58 +46,62 @@ export default function ItemStockScreen() {
       : (LABELS[r.source] ?? r.source);
 
   return (
-    <View style={styles.screen}>
+    <Screen>
       <Stack.Screen options={{ title: item.data[0]?.name ?? 'Stock' }} />
-      <Text style={styles.level}>{level === undefined ? 'Not counted yet' : `Now: ${level} ${unit}`}</Text>
-      <View style={styles.line}>
+      <Text style={{ fontSize: font.title, fontWeight: '700', color: t.textPrimary, fontVariant: ['tabular-nums'], paddingVertical: 12 }}>
+        {level === undefined ? 'Not counted yet' : `Now: ${level} ${unit}`}
+      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <TextInput
-          style={styles.input}
+          style={{
+            flex: 1,
+            minHeight: 56,
+            backgroundColor: t.surfaceRaised,
+            borderColor: t.border,
+            borderWidth: 1,
+            borderRadius: radius.button,
+            paddingHorizontal: 14,
+            fontSize: font.body,
+            color: t.textPrimary,
+          }}
           value={amount}
           onChangeText={setAmount}
           keyboardType="decimal-pad"
           placeholder="Amount"
+          placeholderTextColor={t.textSecondary}
           accessibilityLabel="Amount to add or remove"
         />
-        <Pressable style={styles.button} onPress={() => change(1)} accessibilityRole="button">
-          <Text style={styles.buttonText}>Add</Text>
-        </Pressable>
-        <Pressable style={[styles.button, styles.remove]} onPress={() => change(-1)} accessibilityRole="button">
-          <Text style={styles.removeText}>Remove</Text>
-        </Pressable>
+        <PrimaryButton label="Add" onPress={() => change(1)} />
+        <PrimaryButton label="Remove" variant="outline" onPress={() => change(-1)} />
       </View>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Text style={styles.header}>History</Text>
+      {error ? <Text style={{ color: t.danger, fontSize: font.caption, paddingTop: 4 }}>{error}</Text> : null}
+      <Text style={{ fontSize: font.section, fontWeight: '600', color: t.textSecondary, paddingTop: 20, paddingBottom: 8 }}>History</Text>
       <FlatList
         data={rows}
         keyExtractor={(r) => r.id}
         renderItem={({ item: r }) => (
-          <View style={styles.row}>
-            <Text style={styles.meta}>{new Date(r.date).toLocaleString()}</Text>
-            <Text style={styles.name}>
+          <View
+            style={{
+              backgroundColor: t.card,
+              borderColor: t.border,
+              borderWidth: 1,
+              borderRadius: radius.card,
+              padding: 12,
+              marginBottom: 8,
+              boxShadow: t.cardShadow,
+            }}
+          >
+            <Text style={{ fontSize: font.caption, color: t.textSecondary }}>{new Date(r.date).toLocaleString()}</Text>
+            <Text style={{ fontSize: font.body, fontWeight: '600', color: t.textPrimary, fontVariant: ['tabular-nums'] }}>
               {label(r)} → {r.quantity} {unit}
               {r.entered_packs !== null ? ` (${r.entered_packs} packs)` : ''}
             </Text>
           </View>
         )}
-        ListEmptyComponent={<Text style={styles.empty}>No counts yet. Do a stock-take or add stock above.</Text>}
+        ListEmptyComponent={
+          <Text style={{ textAlign: 'center', color: t.textSecondary, marginTop: 32 }}>No counts yet. Do a stock-take or add stock above.</Text>
+        }
       />
-    </View>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, padding: 16, backgroundColor: '#fff' },
-  level: { fontSize: 22, fontWeight: '700', paddingBottom: 12 },
-  line: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  input: { flex: 1, height: 48, borderWidth: 1, borderColor: '#ccc', borderRadius: 8, paddingHorizontal: 12, fontSize: 16 },
-  button: { height: 48, paddingHorizontal: 16, borderRadius: 8, backgroundColor: '#2e7d32', justifyContent: 'center' },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  remove: { backgroundColor: '#fff', borderWidth: 2, borderColor: '#2e7d32' },
-  removeText: { color: '#2e7d32', fontSize: 16, fontWeight: '700' },
-  error: { color: '#c62828', fontSize: 13, paddingTop: 4 },
-  header: { fontWeight: '700', fontSize: 14, color: '#555', paddingTop: 20, paddingBottom: 4 },
-  row: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#eee' },
-  name: { fontSize: 16 },
-  meta: { fontSize: 13, color: '#777' },
-  empty: { textAlign: 'center', color: '#777', marginTop: 32 },
-});
