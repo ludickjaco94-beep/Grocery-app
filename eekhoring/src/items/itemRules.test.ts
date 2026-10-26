@@ -1,4 +1,4 @@
-import { emptyItemForm, findDuplicate, parseDecimal, validateItem } from './itemRules';
+import { emptyItemForm, findDuplicate, itemToForm, parseDecimal, validateItem } from './itemRules';
 
 test('parseDecimal accepts comma', () => expect(parseDecimal('1,5')).toBe(1.5));
 test('parseDecimal accepts dot and spaces', () => expect(parseDecimal(' 2.25 ')).toBe(2.25));
@@ -47,4 +47,12 @@ test('findDuplicate is case-insensitive and trims', () => {
   const others = [{ id: 'a', name: 'Milk' }];
   expect(findDuplicate(' milk ', others)?.id).toBe('a');
   expect(findDuplicate('milk', others, 'a')).toBeUndefined();
+});
+
+test('itemToForm round-trips through validateItem', () => {
+  const values = {
+    name: 'Mince', unit: 'kg', category: 'Meat', buy_mode: 'monthly', sold_by_weight: 1,
+    buffer_pct: 15, max_months_cover: 2.5, est_monthly_usage: 4.2, pack_size: null,
+  } as const;
+  expect(validateItem(itemToForm(values))).toEqual({ ok: true, values });
 });

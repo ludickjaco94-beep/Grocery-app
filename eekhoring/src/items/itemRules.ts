@@ -93,3 +93,19 @@ export function findDuplicate(
   const key = name.trim().toLowerCase();
   return others.find((o) => o.id !== selfId && o.name.trim().toLowerCase() === key);
 }
+
+const str = (n: number | null) => (n === null ? '' : String(n));
+
+export function itemToForm(v: ItemValues): ItemForm {
+  return {
+    name: v.name,
+    unit: v.unit,
+    category: v.category,
+    buyMode: v.buy_mode,
+    soldByWeight: v.sold_by_weight === 1,
+    bufferPct: str(v.buffer_pct),
+    maxMonthsCover: str(v.max_months_cover),
+    estMonthlyUsage: str(v.est_monthly_usage),
+    packSize: str(v.pack_size),
+  };
+}
