@@ -19,7 +19,14 @@ export function CategoryChips({
 }) {
   const options = [...(includeAll ? [{ name: 'All', value: null }] : []), ...categories.map((c) => ({ name: c.name, value: c.name }))];
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }} keyboardShouldPersistTaps="handled">
+    // flexGrow 0: a horizontal ScrollView otherwise grows to fill the column and stretches the chips tall.
+    <ScrollView
+      horizontal
+      style={{ flexGrow: 0 }}
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{ gap: 8, paddingVertical: 4, alignItems: 'center' }}
+      keyboardShouldPersistTaps="handled"
+    >
       {options.map((o) => (
         <Chip key={o.name} label={o.name} on={o.value === selected} onPress={() => onSelect(o.value)} />
       ))}
@@ -36,9 +43,11 @@ export function Chip({ label, on, onPress }: { label: string; on: boolean; onPre
       accessibilityRole="radio"
       accessibilityState={{ selected: on }}
       style={{
-        minHeight: 48,
+        height: 48,
+        minWidth: 88,
         paddingHorizontal: 16,
         justifyContent: 'center',
+        alignItems: 'center',
         borderRadius: radius.chip,
         borderWidth: 1,
         backgroundColor: on ? t.primary : t.surfaceRaised,
