@@ -69,7 +69,7 @@ export default function ItemsScreen() {
       />
       <View style={styles.buttons}>
         <Link href="/stocktake" asChild>
-          <Pressable style={[styles.add, styles.stocktake]} accessibilityRole="button">
+          <Pressable style={styles.stocktake} accessibilityRole="button">
             <Text style={styles.stocktakeText}>Stock-take</Text>
           </Pressable>
         </Link>
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
   empty: { textAlign: 'center', color: '#777', marginTop: 32 },
   buttons: { flexDirection: 'row', gap: 8, marginTop: 8 },
   add: { flex: 1, backgroundColor: '#2e7d32', borderRadius: 8, padding: 16, alignItems: 'center' },
-  stocktake: { backgroundColor: '#fff', borderWidth: 2, borderColor: '#2e7d32' },
+  stocktake: { flex: 1, backgroundColor: '#fff', borderWidth: 2, borderColor: '#2e7d32', borderRadius: 8, padding: 16, alignItems: 'center' },
   stocktakeText: { color: '#2e7d32', fontSize: 16, fontWeight: '700' },
   addText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });
