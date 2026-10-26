@@ -117,6 +117,11 @@ export default function ItemsScreen() {
           </Text>
         }
       />
+      <View style={{ flexDirection: 'row', paddingTop: 8 }}>
+        <Link href="/purchases" asChild>
+          <PrimaryButton label="Log purchases" variant="accent" />
+        </Link>
+      </View>
       <View style={{ flexDirection: 'row', gap: 8, paddingTop: 8, paddingBottom: 16 }}>
         <Link href="/stocktake" asChild>
           <PrimaryButton label="Stock-take" variant="outline" />

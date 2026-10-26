@@ -23,3 +23,7 @@ test('light cards are solid, dark cards are 92% and shadowless', () => {
   expect(palettes.dark.card).toBe('rgba(23,37,29,0.92)');
   expect(palettes.dark.cardShadow).toBeUndefined();
 });
+
+test.each(['dark', 'light'] as const)('accent button text passes 4.5 in %s', (mode) => {
+  expect(contrastRatio(palettes.dark.bg, palettes[mode].accent)).toBeGreaterThanOrEqual(4.5);
+});
