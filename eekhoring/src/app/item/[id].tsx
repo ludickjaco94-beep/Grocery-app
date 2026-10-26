@@ -35,14 +35,16 @@ export default function ItemEditScreen() {
   const initial = isNew
     ? { ...emptyItemForm, category: 'Other', bufferPct: String(settings.data[0]?.default_buffer_pct ?? 10) }
     : itemToForm(item);
-  return <ItemEditForm id={id} item={isNew ? undefined : item} initial={initial} />;
+  return <ItemEditForm id={id} item={isNew ? undefined : item} initial={initial} saved={custom.data.map((c) => c.name)} />;
 }
 
-function ItemEditForm({ id, item, initial }: { id: string; item?: ItemRow; initial: ItemForm }) {
+function ItemEditForm({ id, item, initial, saved }: { id: string; item?: ItemRow; initial: ItemForm; saved: string[] }) {
   const t = useTheme();
   const isNew = !item;
   const names = useQuery<{ id: string; name: string }>('SELECT id, name FROM items WHERE active = 1');
-  const custom = useQuery<{ name: string }>(CUSTOM_CATEGORIES_SQL).data.map((c) => c.name);
+  // A just-added category counts at once, before the live query catches up, so the chip never flashes back to Other.
+  const [added, setAdded] = useState<string[]>([]);
+  const custom = [...saved, ...added.filter((a) => !saved.includes(a))];
   const [form, setForm] = useState(initial);
   const [errors, setErrors] = useState<Partial<Record<keyof ItemForm, string>>>({});
   const [newCategory, setNewCategory] = useState<string | null>(null);
@@ -77,6 +79,7 @@ function ItemEditForm({ id, item, initial }: { id: string; item?: ItemRow; initi
     if (!result.ok) return setNewCategoryError(result.error);
     return guard.run(async () => {
       await addCategory(result.name);
+      setAdded((a) => [...a, result.name]);
       set('category', result.name);
       setNewCategory(null);
       setNewCategoryError(null);
