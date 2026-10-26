@@ -1,5 +1,5 @@
 import { useQuery } from '@powersync/react-native';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { Link, router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
@@ -153,6 +153,13 @@ function ItemEditForm({ id, item, initial }: { id: string; item?: ItemRow; initi
       <Pressable style={styles.save} onPress={onSave} accessibilityRole="button">
         <Text style={styles.saveText}>Save</Text>
       </Pressable>
+      {!isNew ? (
+        <Link href={`/stock/${id}`} asChild>
+          <Pressable style={styles.archive} accessibilityRole="button">
+            <Text>Stock & history</Text>
+          </Pressable>
+        </Link>
+      ) : null}
       {!isNew && item ? (
         <Pressable style={styles.archive} onPress={onToggleArchive} accessibilityRole="button">
           <Text>{item.active ? 'Archive' : 'Restore'}</Text>
