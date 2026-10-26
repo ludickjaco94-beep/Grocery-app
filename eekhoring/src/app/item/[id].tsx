@@ -205,6 +205,13 @@ function ItemEditForm({ id, item, initial, saved }: { id: string; item?: ItemRow
             </Link>
           )
         : null}
+      {!isNew
+        ? button(
+            <Link href={`/prices/${id}`} asChild>
+              <PrimaryButton label="Prices" variant="outline" />
+            </Link>
+          )
+        : null}
       {!isNew && item
         ? button(<PrimaryButton label={item.active ? 'Archive' : 'Restore'} variant="outline" onPress={onToggleArchive} />)
         : null}
