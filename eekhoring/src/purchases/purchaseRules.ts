@@ -128,6 +128,12 @@ export function shiftDay(iso: string, days: number, now: Date): string {
   return d > now ? now.toISOString() : d.toISOString();
 }
 
+// Today: the real save time. An earlier day: its start, so a stock-take that day is taken to have counted it
+// (fails safe: stock reads low rather than double-counting).
+export function purchaseDate(day: string, now: Date): string {
+  return new Date(day).toDateString() === now.toDateString() ? now.toISOString() : dayRange(day)[0];
+}
+
 export function dayLabel(iso: string, now: Date): string {
   const d = new Date(iso).toDateString();
   if (d === now.toDateString()) return 'Today';

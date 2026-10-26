@@ -5,6 +5,7 @@ import {
   emptyPurchaseForm,
   normalPrice,
   parseMoney,
+  purchaseDate,
   purchaseToForm,
   shiftDay,
   stockDelta,
@@ -116,4 +117,13 @@ test('dayLabel and dayRange', () => {
   const [start, end] = dayRange(now.toISOString());
   expect(start <= now.toISOString() && now.toISOString() < end).toBe(true);
   expect(new Date(end).getTime() - new Date(start).getTime()).toBe(24 * 3600 * 1000);
+});
+
+test('purchaseDate: today is the save time, an earlier day is its start so a same-day stock-take already counted it', () => {
+  const now = new Date('2026-10-26T19:00:00.000Z');
+  expect(purchaseDate('2026-10-26T06:00:00.000Z', now)).toBe(now.toISOString());
+  const yesterday = shiftDay(now.toISOString(), -1, now);
+  expect(purchaseDate(yesterday, now)).toBe(dayRange(yesterday)[0]);
+  const stocktakeYesterdayMorning = new Date(new Date(dayRange(yesterday)[0]).getTime() + 3600 * 1000).toISOString();
+  expect(stockDelta(null, { date: purchaseDate(yesterday, now), quantity: 1 }, stocktakeYesterdayMorning)).toBe(0);
 });

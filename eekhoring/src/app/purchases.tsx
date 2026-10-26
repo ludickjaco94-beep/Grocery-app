@@ -14,7 +14,7 @@ import { findDuplicate } from '@/items/itemRules';
 import { createGuard } from '@/lib/guard';
 import { PurchaseForm } from '@/purchases/PurchaseForm';
 import { addPurchase } from '@/purchases/purchaseRepo';
-import { dayRange, emptyPurchaseForm, formatMoney, unitPriceCents, validatePurchase, type PurchaseFormState } from '@/purchases/purchaseRules';
+import { dayRange, emptyPurchaseForm, purchaseDate, formatMoney, unitPriceCents, validatePurchase, type PurchaseFormState } from '@/purchases/purchaseRules';
 import { addStore, STORES_SQL } from '@/stores/storeRepo';
 import { font, radius } from '@/theme/theme';
 import { useTheme } from '@/theme/useTheme';
@@ -85,7 +85,7 @@ export default function PurchasesScreen() {
     if (!result.ok) return setErrors(result.errors);
     setErrors({});
     return guard.run(async () => {
-      await addPurchase({ ...result.values, item_id: item.id, store_id: storeId, date: day });
+      await addPurchase({ ...result.values, item_id: item.id, store_id: storeId, date: purchaseDate(day, new Date()) });
       setItem(null);
       setForm(emptyPurchaseForm);
       setSearch('');
@@ -156,7 +156,7 @@ export default function PurchasesScreen() {
             name={item.name}
             icon={iconFor(item.category)}
             meta={item.sold_by_weight ? 'by weight' : item.unit}
-            right={<Chip label="Change" on={false} onPress={() => setItem(null)} />}
+            right={<Chip label="Change" on={false} onPress={() => { setItem(null); setForm(emptyPurchaseForm); setErrors({}); }} />}
           />
           <PurchaseForm
             form={form}

@@ -9,7 +9,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { createGuard } from '@/lib/guard';
 import { PurchaseForm } from '@/purchases/PurchaseForm';
 import { deletePurchase, updatePurchase } from '@/purchases/purchaseRepo';
-import { purchaseToForm, validatePurchase, type PurchaseFormState, type PurchaseValues } from '@/purchases/purchaseRules';
+import { purchaseDate, purchaseToForm, validatePurchase, type PurchaseFormState, type PurchaseValues } from '@/purchases/purchaseRules';
 import { STORES_SQL } from '@/stores/storeRepo';
 import { font } from '@/theme/theme';
 import { useTheme } from '@/theme/useTheme';
@@ -50,7 +50,7 @@ function PurchaseEdit({ row }: { row: Row }) {
     if (!result.ok) return setErrors(result.errors);
     setErrors({});
     return guard.run(async () => {
-      await updatePurchase(row.id, { ...result.values, store_id: storeId, date: day });
+      await updatePurchase(row.id, { ...result.values, store_id: storeId, date: day === row.date ? row.date : purchaseDate(day, new Date()) });
       router.back();
     });
   }
