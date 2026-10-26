@@ -1,51 +1,59 @@
 import { useQuery } from '@powersync/react-native';
 import { Link, router, Stack, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { Alert, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 
+import { addCategory, CUSTOM_CATEGORIES_SQL } from '@/categories/categoryRepo';
+import { orderedCategories, resolveCategory, validateNewCategory } from '@/categories/categoryRules';
+import { CategoryChips, Chip } from '@/components/CategoryChips';
+import { FrequencyToggle } from '@/components/FrequencyToggle';
+import { PrimaryButton } from '@/components/PrimaryButton';
 import { createItem, setItemActive, updateItem } from '@/items/itemRepo';
-import {
-  emptyItemForm,
-  findDuplicate,
-  itemToForm,
-  UNITS,
-  validateItem,
-  type BuyMode,
-  type ItemForm,
-  type ItemValues,
-} from '@/items/itemRules';
+import { emptyItemForm, findDuplicate, itemToForm, UNITS, validateItem, type ItemForm, type ItemValues } from '@/items/itemRules';
 import { createGuard } from '@/lib/guard';
+import { font, radius } from '@/theme/theme';
+import { useTheme } from '@/theme/useTheme';
 
 type ItemRow = ItemValues & { id: string; active: number };
 
 export default function ItemEditScreen() {
+  const t = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const isNew = id === 'new';
   const existing = useQuery<ItemRow>('SELECT * FROM items WHERE id = ?', [id]);
   const settings = useQuery<{ default_buffer_pct: number | null }>('SELECT default_buffer_pct FROM settings LIMIT 1');
+  // Custom categories must be loaded first, or an item in one would resolve to Other.
+  const custom = useQuery<{ name: string }>(CUSTOM_CATEGORIES_SQL);
 
+  const message = (text: string) => <Text style={{ flex: 1, padding: 16, color: t.textSecondary, backgroundColor: t.bg }}>{text}</Text>;
   // Wait for the item (or the default buffer for a new item) before building the form.
-  if (isNew ? settings.isLoading : existing.isLoading) return <Text style={styles.loading}>Loading…</Text>;
+  if ((isNew ? settings.isLoading : existing.isLoading) || custom.isLoading) return message('Loading…');
   const item = existing.data[0];
-  if (!isNew && existing.error) return <Text style={styles.loading}>Could not load item: {existing.error.message}</Text>;
-  if (!isNew && !item) return <Text style={styles.loading}>Item not found.</Text>;
+  if (!isNew && existing.error) return message(`Could not load item: ${existing.error.message}`);
+  if (!isNew && !item) return message('Item not found.');
 
   const initial = isNew
-    ? { ...emptyItemForm, bufferPct: String(settings.data[0]?.default_buffer_pct ?? 10) }
+    ? { ...emptyItemForm, category: 'Other', bufferPct: String(settings.data[0]?.default_buffer_pct ?? 10) }
     : itemToForm(item);
-  return <ItemEditForm id={id} item={isNew ? undefined : item} initial={initial} />;
+  return <ItemEditForm id={id} item={isNew ? undefined : item} initial={initial} saved={custom.data.map((c) => c.name)} />;
 }
 
-function ItemEditForm({ id, item, initial }: { id: string; item?: ItemRow; initial: ItemForm }) {
+function ItemEditForm({ id, item, initial, saved }: { id: string; item?: ItemRow; initial: ItemForm; saved: string[] }) {
+  const t = useTheme();
   const isNew = !item;
   const names = useQuery<{ id: string; name: string }>('SELECT id, name FROM items WHERE active = 1');
-  const categories = useQuery<{ category: string }>('SELECT DISTINCT category FROM items ORDER BY category COLLATE NOCASE');
+  // A just-added category counts at once, before the live query catches up, so the chip never flashes back to Other.
+  const [added, setAdded] = useState<string[]>([]);
+  const custom = [...saved, ...added.filter((a) => !saved.includes(a))];
   const [form, setForm] = useState(initial);
   const [errors, setErrors] = useState<Partial<Record<keyof ItemForm, string>>>({});
+  const [newCategory, setNewCategory] = useState<string | null>(null);
+  const [newCategoryError, setNewCategoryError] = useState<string | null>(null);
 
   const [guard] = useState(() => createGuard((e) => Alert.alert('Could not save', String(e))));
 
-  const set = <K extends keyof ItemForm>(key: K, value: ItemForm[K]) => setForm({ ...form, [key]: value });
+  const set = <K extends keyof ItemForm>(key: K, value: ItemForm[K]) => setForm((f) => ({ ...f, [key]: value }));
+  const category = resolveCategory(form.category, custom);
 
   const save = (values: ItemValues) =>
     guard.run(async () => {
@@ -55,7 +63,7 @@ function ItemEditForm({ id, item, initial }: { id: string; item?: ItemRow; initi
     });
 
   function onSave() {
-    const result = validateItem(form);
+    const result = validateItem({ ...form, category });
     if (!result.ok) return setErrors(result.errors);
     setErrors({});
     const dup = findDuplicate(result.values.name, names.data, isNew ? undefined : id);
@@ -66,124 +74,140 @@ function ItemEditForm({ id, item, initial }: { id: string; item?: ItemRow; initi
     ]);
   }
 
+  function onAddCategory() {
+    const result = validateNewCategory(newCategory ?? '', custom);
+    if (!result.ok) return setNewCategoryError(result.error);
+    return guard.run(async () => {
+      await addCategory(result.name);
+      setAdded((a) => [...a, result.name]);
+      set('category', result.name);
+      setNewCategory(null);
+      setNewCategoryError(null);
+    });
+  }
+
   const onToggleArchive = () =>
     guard.run(async () => {
       await setItemActive(id, !item!.active);
       router.back();
     });
 
-  const field = (key: keyof ItemForm, label: string, decimal = false, hint?: string) => (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        style={styles.input}
-        value={form[key] as string}
-        onChangeText={(t) => set(key, t)}
-        keyboardType={decimal ? 'decimal-pad' : 'default'}
-        accessibilityLabel={label}
-      />
-      {hint ? <Text style={styles.hint}>{hint}</Text> : null}
-      {errors[key] ? <Text style={styles.error}>{errors[key]}</Text> : null}
-    </View>
-  );
+  const inputStyle = {
+    backgroundColor: t.surfaceRaised,
+    borderColor: t.border,
+    borderWidth: 1,
+    borderRadius: radius.button,
+    paddingHorizontal: 14,
+    minHeight: 48,
+    fontSize: font.body,
+    color: t.textPrimary,
+  };
+  const label = (text: string) => <Text style={{ fontSize: font.small, fontWeight: '600', color: t.textPrimary, marginBottom: 6 }}>{text}</Text>;
+  const hint = (text: string) => <Text style={{ fontSize: font.caption, color: t.textSecondary, marginTop: 4 }}>{text}</Text>;
+  const error = (text?: string | null) => (text ? <Text style={{ fontSize: font.caption, color: t.danger, marginTop: 4 }}>{text}</Text> : null);
+  const section = (children: ReactNode) => <View style={{ marginBottom: 16 }}>{children}</View>;
+  const button = (children: ReactNode) => <View style={{ flexDirection: 'row', marginTop: 12 }}>{children}</View>;
 
-  const choice = <T extends string>(options: { value: T; label: string }[], value: T, onPick: (v: T) => void) => (
-    <View style={styles.choices}>
-      {options.map((o) => (
-        <Pressable
-          key={o.value}
-          onPress={() => onPick(o.value)}
-          style={[styles.choice, value === o.value && styles.choiceOn]}
-          accessibilityRole="radio"
-          accessibilityState={{ selected: value === o.value }}
-        >
-          <Text style={value === o.value ? styles.choiceOnText : undefined}>{o.label}</Text>
-        </Pressable>
-      ))}
-    </View>
-  );
+  const field = (key: keyof ItemForm, text: string, decimal = false, hintText?: string) =>
+    section(
+      <>
+        {label(text)}
+        <TextInput
+          style={inputStyle}
+          value={form[key] as string}
+          onChangeText={(v) => set(key, v)}
+          keyboardType={decimal ? 'decimal-pad' : 'default'}
+          accessibilityLabel={text}
+        />
+        {hintText ? hint(hintText) : null}
+        {error(errors[key])}
+      </>
+    );
 
   return (
-    <ScrollView contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled">
+    <ScrollView style={{ backgroundColor: t.bg }} contentContainerStyle={{ padding: 16 }} keyboardShouldPersistTaps="handled">
       <Stack.Screen options={{ title: isNew ? 'Add item' : 'Edit item' }} />
       {field('name', 'Name')}
 
-      <View style={styles.switchRow}>
-        <Text style={styles.label}>Sold by weight (kg)</Text>
-        <Switch value={form.soldByWeight} onValueChange={(v) => set('soldByWeight', v)} accessibilityLabel="Sold by weight" />
-      </View>
-
-      {form.soldByWeight ? (
-        <Text style={styles.hint}>Unit: kg. Prices show per kg.</Text>
-      ) : (
-        <View style={styles.field}>
-          <Text style={styles.label}>Unit</Text>
-          {choice(UNITS.map((u) => ({ value: u, label: u })), form.unit, (u) => set('unit', u))}
+      {section(
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 48 }}>
+          {label('Sold by weight (kg)')}
+          <Switch
+            value={form.soldByWeight}
+            onValueChange={(v) => set('soldByWeight', v)}
+            accessibilityLabel="Sold by weight"
+            trackColor={{ true: t.primary, false: t.border }}
+            thumbColor={t.surface}
+          />
         </View>
       )}
 
-      {field('category', 'Category')}
-      <View style={styles.choices}>
-        {categories.data
-          .filter((c) => c.category !== form.category)
-          .map((c) => (
-            <Pressable key={c.category} onPress={() => set('category', c.category)} style={styles.chip}>
-              <Text>{c.category}</Text>
-            </Pressable>
-          ))}
-      </View>
+      {form.soldByWeight
+        ? section(hint('Unit: kg. Prices show per kg.'))
+        : section(
+            <>
+              {label('Unit')}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {UNITS.map((u) => (
+                  <Chip key={u} label={u} on={form.unit === u} onPress={() => set('unit', u)} />
+                ))}
+              </View>
+            </>
+          )}
 
-      <View style={styles.field}>
-        <Text style={styles.label}>Buy</Text>
-        {choice<BuyMode>(
-          [
-            { value: 'monthly', label: 'Monthly' },
-            { value: 'as_needed', label: 'As needed' },
-          ],
-          form.buyMode,
-          (m) => set('buyMode', m)
-        )}
-      </View>
+      {section(
+        <>
+          {label('Category')}
+          <CategoryChips
+            categories={orderedCategories(custom)}
+            selected={category}
+            onSelect={(c) => c && set('category', c)}
+            includeAll={false}
+            trailing={<Chip label="+ New category" on={false} onPress={() => setNewCategory('')} />}
+          />
+          {newCategory !== null ? (
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+              <TextInput
+                style={{ ...inputStyle, flex: 1 }}
+                value={newCategory}
+                onChangeText={setNewCategory}
+                placeholder="New category name"
+                placeholderTextColor={t.textSecondary}
+                accessibilityLabel="New category name"
+                autoFocus
+              />
+              <View style={{ flexDirection: 'row', width: 96 }}>
+                <PrimaryButton label="Add" onPress={onAddCategory} />
+              </View>
+            </View>
+          ) : null}
+          {error(newCategoryError)}
+        </>
+      )}
+
+      {section(
+        <>
+          {label('Buy')}
+          <FrequencyToggle value={form.buyMode} onChange={(m) => set('buyMode', m)} />
+        </>
+      )}
 
       {field('bufferPct', 'Buffer %', true, 'Extra on top of average use')}
       {field('maxMonthsCover', 'Cap (months of stock)', true, 'Never suggest more than this')}
       {field('estMonthlyUsage', `Monthly estimate (${form.soldByWeight ? 'kg' : form.unit})`, true, 'Used until two stock-takes exist')}
       {form.soldByWeight ? null : field('packSize', 'Pack size (optional)', true)}
 
-      <Pressable style={styles.save} onPress={onSave} accessibilityRole="button">
-        <Text style={styles.saveText}>Save</Text>
-      </Pressable>
-      {!isNew ? (
-        <Link href={`/stock/${id}`} asChild>
-          <Pressable style={styles.archive} accessibilityRole="button">
-            <Text>Stock & history</Text>
-          </Pressable>
-        </Link>
-      ) : null}
-      {!isNew && item ? (
-        <Pressable style={styles.archive} onPress={onToggleArchive} accessibilityRole="button">
-          <Text>{item.active ? 'Archive' : 'Restore'}</Text>
-        </Pressable>
-      ) : null}
+      {button(<PrimaryButton label="Save" onPress={onSave} />)}
+      {!isNew
+        ? button(
+            <Link href={`/stock/${id}`} asChild>
+              <PrimaryButton label="Stock & history" variant="outline" />
+            </Link>
+          )
+        : null}
+      {!isNew && item
+        ? button(<PrimaryButton label={item.active ? 'Archive' : 'Restore'} variant="outline" onPress={onToggleArchive} />)
+        : null}
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { padding: 16, backgroundColor: '#fff' },
-  loading: { padding: 16 },
-  field: { marginBottom: 12 },
-  label: { fontSize: 14, fontWeight: '600', marginBottom: 4 },
-  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 12, fontSize: 16 },
-  hint: { fontSize: 12, color: '#777', marginTop: 2, marginBottom: 8 },
-  error: { fontSize: 13, color: '#c62828', marginTop: 2 },
-  switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  choices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
-  choice: { minHeight: 44, minWidth: 56, paddingHorizontal: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#ccc', borderRadius: 8 },
-  choiceOn: { backgroundColor: '#2e7d32', borderColor: '#2e7d32' },
-  choiceOnText: { color: '#fff', fontWeight: '700' },
-  chip: { minHeight: 36, paddingHorizontal: 12, justifyContent: 'center', borderRadius: 18, backgroundColor: '#eee' },
-  save: { backgroundColor: '#2e7d32', borderRadius: 8, padding: 16, alignItems: 'center', marginTop: 8 },
-  saveText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  archive: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 16, alignItems: 'center', marginTop: 12 },
-});

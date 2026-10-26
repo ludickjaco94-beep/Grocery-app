@@ -1,9 +1,17 @@
 import { useQuery } from '@powersync/react-native';
 import { Link, Stack } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Pressable, SectionList, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, SectionList, Switch, Text, TextInput, View } from 'react-native';
 
+import { CUSTOM_CATEGORIES_SQL } from '@/categories/categoryRepo';
+import { groupByCategory, orderedCategories } from '@/categories/categoryRules';
+import { CategoryChips } from '@/components/CategoryChips';
+import { ItemCard, StockNumber } from '@/components/ItemCard';
+import { PrimaryButton } from '@/components/PrimaryButton';
+import { Screen } from '@/components/Screen';
 import { CURRENT_STOCK_SQL } from '@/stock/stockRepo';
+import { font, radius } from '@/theme/theme';
+import { useTheme } from '@/theme/useTheme';
 
 type Row = {
   id: string;
@@ -17,85 +25,106 @@ type Row = {
 };
 
 export default function ItemsScreen() {
+  const t = useTheme();
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
   const { data } = useQuery<Row>(
     `SELECT id, name, unit, category, buy_mode, sold_by_weight, active, cs.quantity FROM items
      LEFT JOIN (${CURRENT_STOCK_SQL}) cs ON cs.item_id = items.id
      WHERE name LIKE ? AND (active = 1 OR ? = 1)
-     ORDER BY category COLLATE NOCASE, name COLLATE NOCASE`,
+     ORDER BY name COLLATE NOCASE`,
     [`%${search.trim()}%`, showArchived ? 1 : 0]
   );
+  const custom = useQuery<{ name: string }>(CUSTOM_CATEGORIES_SQL).data.map((c) => c.name);
+  const last = useQuery<{ last: string | null }>(
+    "SELECT MAX(date) AS last FROM stock_counts WHERE source = 'stocktake'"
+  ).data[0]?.last;
 
-  const sections = useMemo(() => {
-    const byCategory = new Map<string, Row[]>();
-    for (const r of data) byCategory.set(r.category, [...(byCategory.get(r.category) ?? []), r]);
-    return [...byCategory].map(([title, rows]) => ({ title, data: rows }));
-  }, [data]);
+  const sections = groupByCategory(data, custom, selected);
+  const sub = [
+    `${data.length} items`,
+    last ? `last stock-take ${new Date(last).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
-    <View style={styles.screen}>
-      <Stack.Screen options={{ title: 'Items' }} />
+    <Screen>
+      <Stack.Screen options={{ title: 'Stock' }} />
+      <Text style={{ fontSize: font.caption, color: t.textSecondary, marginBottom: 12 }}>{sub}</Text>
       <TextInput
-        style={styles.search}
+        style={{
+          backgroundColor: t.surfaceRaised,
+          borderColor: t.border,
+          borderWidth: 1,
+          borderRadius: radius.button,
+          paddingHorizontal: 14,
+          minHeight: 48,
+          fontSize: font.body,
+          color: t.textPrimary,
+        }}
         placeholder="Search items"
+        placeholderTextColor={t.textSecondary}
         value={search}
         onChangeText={setSearch}
         accessibilityLabel="Search items"
       />
-      <View style={styles.row}>
-        <Text>Show archived</Text>
-        <Switch value={showArchived} onValueChange={setShowArchived} accessibilityLabel="Show archived" />
+      <View style={{ marginTop: 8 }}>
+        <CategoryChips categories={orderedCategories(custom)} selected={selected} onSelect={setSelected} />
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 48 }}>
+        <Text style={{ fontSize: font.small, color: t.textSecondary }}>Show archived</Text>
+        <Switch
+          value={showArchived}
+          onValueChange={setShowArchived}
+          accessibilityLabel="Show archived"
+          trackColor={{ true: t.primary, false: t.border }}
+          thumbColor={t.surface}
+        />
       </View>
       <SectionList
         sections={sections}
         keyExtractor={(r) => r.id}
-        renderSectionHeader={({ section }) => <Text style={styles.header}>{section.title}</Text>}
-        renderItem={({ item }) => (
+        stickySectionHeadersEnabled={false}
+        renderSectionHeader={({ section }) => (
+          <Text style={{ fontSize: font.section, fontWeight: '600', color: t.textSecondary, paddingTop: 12, paddingBottom: 8 }}>
+            {section.title}
+          </Text>
+        )}
+        renderItem={({ item, section }) => (
           <Link href={`/item/${item.id}`} asChild>
-            <Pressable style={styles.item}>
-              <Text style={[styles.name, !item.active && styles.archived]}>{item.name}</Text>
-              <Text style={styles.meta}>
-                {[item.quantity === null ? null : `${item.quantity} left`, item.unit, item.sold_by_weight ? 'by weight' : null, item.buy_mode === 'as_needed' ? 'as needed' : null, item.active ? null : 'archived']
+            <Pressable accessibilityRole="button">
+              <ItemCard
+                name={item.name}
+                icon={section.icon}
+                muted={!item.active}
+                meta={[
+                  item.buy_mode === 'as_needed' ? 'As needed' : 'Monthly',
+                  item.sold_by_weight ? 'by weight' : item.unit,
+                  item.active ? null : 'archived',
+                ]
                   .filter(Boolean)
                   .join(' · ')}
-              </Text>
+                right={<StockNumber quantity={item.quantity} unit={item.unit} />}
+              />
             </Pressable>
           </Link>
         )}
         ListEmptyComponent={
-          <Text style={styles.empty}>{search ? 'No items match your search.' : 'No items yet. Tap + Add item to start.'}</Text>
+          <Text style={{ textAlign: 'center', color: t.textSecondary, marginTop: 32 }}>
+            {search || selected ? 'No items match.' : 'No items yet. Tap + Add item to start.'}
+          </Text>
         }
       />
-      <View style={styles.buttons}>
+      <View style={{ flexDirection: 'row', gap: 8, paddingTop: 8, paddingBottom: 16 }}>
         <Link href="/stocktake" asChild>
-          <Pressable style={styles.stocktake} accessibilityRole="button">
-            <Text style={styles.stocktakeText}>Stock-take</Text>
-          </Pressable>
+          <PrimaryButton label="Stock-take" variant="outline" />
         </Link>
         <Link href="/item/new" asChild>
-          <Pressable style={styles.add} accessibilityRole="button">
-            <Text style={styles.addText}>+ Add item</Text>
-          </Pressable>
+          <PrimaryButton label="+ Add item" />
         </Link>
       </View>
-    </View>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, padding: 16, backgroundColor: '#fff' },
-  search: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 12, fontSize: 16 },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 },
-  header: { fontWeight: '700', fontSize: 14, color: '#555', paddingTop: 16, paddingBottom: 4, backgroundColor: '#fff' },
-  item: { minHeight: 48, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#eee' },
-  name: { fontSize: 16 },
-  archived: { color: '#999' },
-  meta: { fontSize: 13, color: '#777' },
-  empty: { textAlign: 'center', color: '#777', marginTop: 32 },
-  buttons: { flexDirection: 'row', gap: 8, marginTop: 8 },
-  add: { flex: 1, backgroundColor: '#2e7d32', borderRadius: 8, padding: 16, alignItems: 'center' },
-  stocktake: { flex: 1, backgroundColor: '#fff', borderWidth: 2, borderColor: '#2e7d32', borderRadius: 8, padding: 16, alignItems: 'center' },
-  stocktakeText: { color: '#2e7d32', fontSize: 16, fontWeight: '700' },
-  addText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-});

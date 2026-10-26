@@ -78,7 +78,13 @@ const list_entries = new Table(
   { indexes: { item: ['item_id'] } }
 );
 
-export const AppSchema = new Schema({ items, stores, purchases, stock_counts, trips, settings, list_entries });
+// The owner's own categories; the built-in list lives in code (src/categories).
+const categories = new Table({
+  name: column.text,
+  created_at: column.text,
+});
+
+export const AppSchema = new Schema({ items, stores, purchases, stock_counts, trips, settings, list_entries, categories });
 
 export type Database = (typeof AppSchema)['types'];
 export type ItemRecord = Database['items'];
