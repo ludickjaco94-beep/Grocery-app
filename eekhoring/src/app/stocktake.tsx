@@ -1,43 +1,58 @@
 import { useQuery } from '@powersync/react-native';
 import { router, Stack, usePreventRemove } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Alert, Pressable, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, SectionList, Text, View } from 'react-native';
 
+import { CUSTOM_CATEGORIES_SQL } from '@/categories/categoryRepo';
+import { groupByCategory, orderedCategories } from '@/categories/categoryRules';
+import { CategoryChips, Chip } from '@/components/CategoryChips';
+import { ItemCard } from '@/components/ItemCard';
+import { PrimaryButton } from '@/components/PrimaryButton';
+import { QuantityStepper } from '@/components/QuantityStepper';
+import { Screen } from '@/components/Screen';
 import { type Unit } from '@/items/itemRules';
 import { createGuard } from '@/lib/guard';
 import { CURRENT_STOCK_SQL, KG_PER_PACK_SQL, saveStockTake } from '@/stock/stockRepo';
 import { buildStockTake, bumpCount, NO_PACK_DATA, stepFor, usageWindowStart } from '@/stock/stockRules';
+import { font } from '@/theme/theme';
+import { useTheme } from '@/theme/useTheme';
 
 type ItemRow = { id: string; name: string; unit: Unit; category: string; sold_by_weight: number; quantity: number | null };
 type Entry = { text: string; packs: boolean };
 
 export default function StockTakeScreen() {
+  const t = useTheme();
   const [now] = useState(() => new Date());
   const items = useQuery<ItemRow>(
     `SELECT items.id, items.name, items.unit, items.category, items.sold_by_weight, cs.quantity FROM items
      LEFT JOIN (${CURRENT_STOCK_SQL}) cs ON cs.item_id = items.id
-     WHERE items.active = 1 ORDER BY items.category COLLATE NOCASE, items.name COLLATE NOCASE`
+     WHERE items.active = 1 ORDER BY items.name COLLATE NOCASE`
   );
   const settings = useQuery<{ usage_window_months: number | null }>('SELECT usage_window_months FROM settings LIMIT 1');
   const months = settings.data[0]?.usage_window_months ?? 3;
   const packs = useQuery<{ item_id: string; kg_per_pack: number }>(KG_PER_PACK_SQL, [usageWindowStart(now, months)]);
+  const custom = useQuery<{ name: string }>(CUSTOM_CATEGORIES_SQL);
 
   // Build the rows once everything has loaded, so the starting counts are the real last counts.
-  if (items.isLoading || settings.isLoading || packs.isLoading) return <Text style={styles.empty}>Loading…</Text>;
+  if (items.isLoading || settings.isLoading || packs.isLoading || custom.isLoading)
+    return <Text style={{ padding: 16, color: t.textSecondary, backgroundColor: t.bg, flex: 1 }}>Loading…</Text>;
   const kgPerPack = new Map(packs.data.map((p) => [p.item_id, p.kg_per_pack]));
-  return <StockTakeForm items={items.data} kgPerPack={kgPerPack} />;
+  return <StockTakeForm items={items.data} kgPerPack={kgPerPack} custom={custom.data.map((c) => c.name)} />;
 }
 
-function StockTakeForm({ items, kgPerPack }: { items: ItemRow[]; kgPerPack: Map<string, number> }) {
+function StockTakeForm({ items, kgPerPack, custom }: { items: ItemRow[]; kgPerPack: Map<string, number>; custom: string[] }) {
+  const t = useTheme();
   // Rows start blank (last count shown greyed): only rows the owner actually touches are saved.
   const [entries, setEntries] = useState<Record<string, Entry>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [selected, setSelected] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [guard] = useState(() => createGuard((e) => Alert.alert('Could not save', String(e))));
 
   const entry = (id: string) => entries[id] ?? { text: '', packs: false };
   const set = (id: string, e: Entry) => setEntries((all) => ({ ...all, [id]: e }));
   const dirty = Object.values(entries).some((e) => e.text !== '' || e.packs);
+  const counted = Object.values(entries).filter((e) => e.text.trim() !== '').length;
 
   usePreventRemove(dirty && !saved, ({ repeat }) =>
     Alert.alert('Discard this stock-take?', undefined, [
@@ -46,18 +61,13 @@ function StockTakeForm({ items, kgPerPack }: { items: ItemRow[]; kgPerPack: Map<
     ])
   );
 
-  const sections = useMemo(() => {
-    const byCategory = new Map<string, ItemRow[]>();
-    for (const r of items) byCategory.set(r.category, [...(byCategory.get(r.category) ?? []), r]);
-    return [...byCategory].map(([title, data]) => ({ title, data }));
-  }, [items]);
-
   function bump(item: ItemRow, sign: 1 | -1) {
     const e = entry(item.id);
     // The last count is in kg, so it is no starting point for a packs count.
     set(item.id, { ...e, text: bumpCount(e.text, e.packs ? null : item.quantity, e.packs ? 1 : stepFor(item.unit), sign) });
   }
 
+  // Saves every touched row, including ones hidden by the category filter.
   const onSave = () =>
     guard.run(async () => {
       const result = buildStockTake(
@@ -65,6 +75,7 @@ function StockTakeForm({ items, kgPerPack }: { items: ItemRow[]; kgPerPack: Map<
       );
       if (!result.ok) {
         setErrors(result.errors);
+        setSelected(null);
         Alert.alert('Fix the rows marked red');
         return;
       }
@@ -78,91 +89,66 @@ function StockTakeForm({ items, kgPerPack }: { items: ItemRow[]; kgPerPack: Map<
     });
 
   return (
-    <View style={styles.screen}>
+    <Screen>
       <Stack.Screen options={{ title: 'Stock-take' }} />
+      <Text style={{ fontSize: font.caption, color: t.textSecondary, marginBottom: 8 }}>
+        Grey = last count. Untouched rows are skipped.
+      </Text>
+      <CategoryChips categories={orderedCategories(custom)} selected={selected} onSelect={setSelected} />
       <SectionList
-        sections={sections}
+        sections={groupByCategory(items, custom, selected)}
         keyExtractor={(r) => r.id}
         keyboardShouldPersistTaps="handled"
-        renderSectionHeader={({ section }) => <Text style={styles.header}>{section.title}</Text>}
-        renderItem={({ item }) => {
+        stickySectionHeadersEnabled={false}
+        renderSectionHeader={({ section }) => (
+          <Text style={{ fontSize: font.section, fontWeight: '600', color: t.textSecondary, paddingTop: 12, paddingBottom: 8 }}>
+            {section.title}
+          </Text>
+        )}
+        renderItem={({ item, section }) => {
           const e = entry(item.id);
           const hasPacks = kgPerPack.has(item.id);
           return (
-            <View style={styles.item}>
-              <View style={styles.line}>
-                <Text style={styles.name}>
-                  {item.name} <Text style={styles.meta}>{e.packs ? 'packs' : item.unit}</Text>
-                </Text>
-                <Pressable style={styles.step} onPress={() => bump(item, -1)} accessibilityLabel={`Less ${item.name}`}>
-                  <Text style={styles.stepText}>−</Text>
-                </Pressable>
-                <TextInput
-                  style={[styles.input, errors[item.id] && styles.inputError]}
-                  value={e.text}
-                  onChangeText={(text) => set(item.id, { ...e, text })}
-                  placeholder={e.packs || item.quantity === null ? '' : String(item.quantity)}
-                  placeholderTextColor="#999"
-                  keyboardType="decimal-pad"
-                  accessibilityLabel={`Count of ${item.name}`}
-                />
-                <Pressable style={styles.step} onPress={() => bump(item, 1)} accessibilityLabel={`More ${item.name}`}>
-                  <Text style={styles.stepText}>+</Text>
-                </Pressable>
-              </View>
-              {item.sold_by_weight ? (
-                <View style={styles.line}>
-                  {(['kg', 'packs'] as const).map((mode) => {
-                    const on = e.packs === (mode === 'packs');
-                    const disabled = mode === 'packs' && !hasPacks;
-                    return (
-                      <Pressable
-                        key={mode}
-                        disabled={disabled}
-                        // A number means something else in the other mode, so switching clears it.
-                        onPress={() => !on && set(item.id, { text: '', packs: mode === 'packs' })}
-                        style={[styles.mode, on && styles.modeOn, disabled && styles.modeDisabled]}
-                        accessibilityRole="radio"
-                        accessibilityState={{ selected: on, disabled }}
-                      >
-                        <Text style={on ? styles.modeOnText : undefined}>{mode}</Text>
-                      </Pressable>
-                    );
-                  })}
-                  {hasPacks ? null : <Text style={styles.hint}>{NO_PACK_DATA}</Text>}
-                </View>
+            <View>
+              <ItemCard
+                name={item.name}
+                icon={section.icon}
+                meta={e.packs ? 'packs' : item.unit}
+                right={
+                  <QuantityStepper
+                    value={e.text}
+                    placeholder={e.packs || item.quantity === null ? '' : String(item.quantity)}
+                    onMinus={() => bump(item, -1)}
+                    onPlus={() => bump(item, 1)}
+                    onChangeText={(text) => set(item.id, { ...e, text })}
+                    label={item.name}
+                    invalid={!!errors[item.id]}
+                  />
+                }
+              >
+                {item.sold_by_weight ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                    <Chip label="kg" on={!e.packs} onPress={() => e.packs && set(item.id, { text: '', packs: false })} />
+                    {hasPacks ? (
+                      // A number means something else in the other mode, so switching clears it.
+                      <Chip label="packs" on={e.packs} onPress={() => !e.packs && set(item.id, { text: '', packs: true })} />
+                    ) : (
+                      <Text style={{ flex: 1, fontSize: font.caption, color: t.textSecondary }}>{NO_PACK_DATA}</Text>
+                    )}
+                  </View>
+                ) : null}
+              </ItemCard>
+              {errors[item.id] ? (
+                <Text style={{ color: t.danger, fontSize: font.caption, marginTop: -4, marginBottom: 8 }}>{errors[item.id]}</Text>
               ) : null}
-              {errors[item.id] ? <Text style={styles.error}>{errors[item.id]}</Text> : null}
             </View>
           );
         }}
-        ListEmptyComponent={<Text style={styles.empty}>No items yet. Add items first.</Text>}
+        ListEmptyComponent={<Text style={{ textAlign: 'center', color: t.textSecondary, marginTop: 32 }}>No items yet. Add items first.</Text>}
       />
-      <Pressable style={styles.save} onPress={onSave} accessibilityRole="button">
-        <Text style={styles.saveText}>Save stock-take</Text>
-      </Pressable>
-    </View>
+      <View style={{ flexDirection: 'row', paddingTop: 8, paddingBottom: 16 }}>
+        <PrimaryButton label={`Save stock-take (${counted})`} onPress={onSave} />
+      </View>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, padding: 16, backgroundColor: '#fff' },
-  header: { fontWeight: '700', fontSize: 14, color: '#555', paddingTop: 16, paddingBottom: 4, backgroundColor: '#fff' },
-  item: { paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#eee' },
-  line: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 },
-  name: { flex: 1, fontSize: 16 },
-  meta: { fontSize: 13, color: '#777' },
-  step: { width: 48, height: 48, borderRadius: 8, backgroundColor: '#eee', alignItems: 'center', justifyContent: 'center' },
-  stepText: { fontSize: 22, fontWeight: '700' },
-  input: { width: 72, height: 48, borderWidth: 1, borderColor: '#ccc', borderRadius: 8, textAlign: 'center', fontSize: 16 },
-  inputError: { borderColor: '#c62828' },
-  mode: { minHeight: 36, paddingHorizontal: 12, borderRadius: 18, borderWidth: 1, borderColor: '#ccc', justifyContent: 'center' },
-  modeOn: { backgroundColor: '#2e7d32', borderColor: '#2e7d32' },
-  modeOnText: { color: '#fff' },
-  modeDisabled: { opacity: 0.4 },
-  hint: { flex: 1, fontSize: 12, color: '#777' },
-  error: { color: '#c62828', fontSize: 13 },
-  empty: { textAlign: 'center', color: '#777', marginTop: 32 },
-  save: { backgroundColor: '#2e7d32', borderRadius: 8, padding: 16, alignItems: 'center', marginTop: 8 },
-  saveText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-});
