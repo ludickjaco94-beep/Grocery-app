@@ -55,6 +55,7 @@ Dropped: home-screen web app (browser may wipe data), no-code builders (online-o
 - In Expo Go, use `@powersync/adapter-sql-js`; in development builds and the APK, use the native OP-SQLite adapter. Switch on `Constants.executionEnvironment === "storeClient"` (pattern from PowerSync's Expo Go docs).
 - All `id` columns are UUID text generated on the phone (PowerSync requirement; also makes two-phone merging safe).
 - The schema is declared in code via PowerSync's schema. The handover's "migrations" step in phase 1 becomes "define the PowerSync schema".
+- Every `stock_counts` row is the **stock level after** that event, never a delta. Current stock = the item's latest row by `date` (full ISO timestamp). Adjustments and (from phase 3) purchases write a new row with the new level; usage (5.1) reads only `stocktake` rows plus purchases between them. Decided at phase 2 planning.
 - Archiving (`active = false`) stays the only delete for items. Purchases, stock counts and trips are never hard-deleted silently.
 
 ### 4.2 Weight-sold items
@@ -79,6 +80,7 @@ list_entries
 
 - Ticking writes to this table, not to memory, so ticks survive an app restart even before sharing exists.
 - "Complete trip" converts ticked entries to purchases (handover screen 1) and clears them.
+- While shopping, the owner can create a brand-new item straight from the checklist. It opens the item form, saves the item, and adds it as a ticked `added_manually` entry (owner request, 2026-10-26).
 
 ### 4.4 Sharing (phase 7)
 

@@ -56,3 +56,17 @@ test('itemToForm round-trips through validateItem', () => {
   } as const;
   expect(validateItem(itemToForm(values))).toEqual({ ok: true, values });
 });
+
+test('parseDecimal accepts leading and trailing separators', () => {
+  expect(parseDecimal('.5')).toBe(0.5);
+  expect(parseDecimal(',5')).toBe(0.5);
+  expect(parseDecimal('2,')).toBe(2);
+  expect(parseDecimal('.')).toBe('invalid');
+  expect(parseDecimal('1.2.3')).toBe('invalid');
+});
+
+test('cap error has no float noise', () => {
+  const r = validateItem({ ...emptyItemForm, name: 'Rice', bufferPct: '14', maxMonthsCover: '1' });
+  expect(r.ok).toBe(false);
+  if (!r.ok) expect(r.errors.maxMonthsCover).toBe('Cap must be at least 1.14 months to cover the 14% buffer');
+});

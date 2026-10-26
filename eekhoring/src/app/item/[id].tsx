@@ -1,5 +1,5 @@
 import { useQuery } from '@powersync/react-native';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { Link, router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
@@ -27,6 +27,7 @@ export default function ItemEditScreen() {
   // Wait for the item (or the default buffer for a new item) before building the form.
   if (isNew ? settings.isLoading : existing.isLoading) return <Text style={styles.loading}>Loading…</Text>;
   const item = existing.data[0];
+  if (!isNew && existing.error) return <Text style={styles.loading}>Could not load item: {existing.error.message}</Text>;
   if (!isNew && !item) return <Text style={styles.loading}>Item not found.</Text>;
 
   const initial = isNew
@@ -152,6 +153,13 @@ function ItemEditForm({ id, item, initial }: { id: string; item?: ItemRow; initi
       <Pressable style={styles.save} onPress={onSave} accessibilityRole="button">
         <Text style={styles.saveText}>Save</Text>
       </Pressable>
+      {!isNew ? (
+        <Link href={`/stock/${id}`} asChild>
+          <Pressable style={styles.archive} accessibilityRole="button">
+            <Text>Stock & history</Text>
+          </Pressable>
+        </Link>
+      ) : null}
       {!isNew && item ? (
         <Pressable style={styles.archive} onPress={onToggleArchive} accessibilityRole="button">
           <Text>{item.active ? 'Archive' : 'Restore'}</Text>

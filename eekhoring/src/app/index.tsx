@@ -3,13 +3,25 @@ import { Link, Stack } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, SectionList, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
-type Row = { id: string; name: string; unit: string; category: string; buy_mode: string; sold_by_weight: number; active: number };
+import { CURRENT_STOCK_SQL } from '@/stock/stockRepo';
+
+type Row = {
+  id: string;
+  name: string;
+  unit: string;
+  category: string;
+  buy_mode: string;
+  sold_by_weight: number;
+  active: number;
+  quantity: number | null;
+};
 
 export default function ItemsScreen() {
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const { data } = useQuery<Row>(
-    `SELECT id, name, unit, category, buy_mode, sold_by_weight, active FROM items
+    `SELECT id, name, unit, category, buy_mode, sold_by_weight, active, cs.quantity FROM items
+     LEFT JOIN (${CURRENT_STOCK_SQL}) cs ON cs.item_id = items.id
      WHERE name LIKE ? AND (active = 1 OR ? = 1)
      ORDER BY category COLLATE NOCASE, name COLLATE NOCASE`,
     [`%${search.trim()}%`, showArchived ? 1 : 0]
@@ -44,7 +56,7 @@ export default function ItemsScreen() {
             <Pressable style={styles.item}>
               <Text style={[styles.name, !item.active && styles.archived]}>{item.name}</Text>
               <Text style={styles.meta}>
-                {[item.unit, item.sold_by_weight ? 'by weight' : null, item.buy_mode === 'as_needed' ? 'as needed' : null, item.active ? null : 'archived']
+                {[item.quantity === null ? null : `${item.quantity} left`, item.unit, item.sold_by_weight ? 'by weight' : null, item.buy_mode === 'as_needed' ? 'as needed' : null, item.active ? null : 'archived']
                   .filter(Boolean)
                   .join(' · ')}
               </Text>
@@ -55,11 +67,18 @@ export default function ItemsScreen() {
           <Text style={styles.empty}>{search ? 'No items match your search.' : 'No items yet. Tap + Add item to start.'}</Text>
         }
       />
-      <Link href="/item/new" asChild>
-        <Pressable style={styles.add} accessibilityRole="button">
-          <Text style={styles.addText}>+ Add item</Text>
-        </Pressable>
-      </Link>
+      <View style={styles.buttons}>
+        <Link href="/stocktake" asChild>
+          <Pressable style={styles.stocktake} accessibilityRole="button">
+            <Text style={styles.stocktakeText}>Stock-take</Text>
+          </Pressable>
+        </Link>
+        <Link href="/item/new" asChild>
+          <Pressable style={styles.add} accessibilityRole="button">
+            <Text style={styles.addText}>+ Add item</Text>
+          </Pressable>
+        </Link>
+      </View>
     </View>
   );
 }
@@ -74,6 +93,9 @@ const styles = StyleSheet.create({
   archived: { color: '#999' },
   meta: { fontSize: 13, color: '#777' },
   empty: { textAlign: 'center', color: '#777', marginTop: 32 },
-  add: { backgroundColor: '#2e7d32', borderRadius: 8, padding: 16, alignItems: 'center', marginTop: 8 },
+  buttons: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  add: { flex: 1, backgroundColor: '#2e7d32', borderRadius: 8, padding: 16, alignItems: 'center' },
+  stocktake: { flex: 1, backgroundColor: '#fff', borderWidth: 2, borderColor: '#2e7d32', borderRadius: 8, padding: 16, alignItems: 'center' },
+  stocktakeText: { color: '#2e7d32', fontSize: 16, fontWeight: '700' },
   addText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });
