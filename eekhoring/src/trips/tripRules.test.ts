@@ -15,20 +15,30 @@ test('tripIdFor', () => {
 });
 
 test('validateCosts', () => {
-  expect(validateCosts({ fuel: '', toll: '', parking: '', other: '', note: ' ' })).toEqual({
+  expect(validateCosts({ fuel: '', toll: '', parking: '', other: '', delivery: '', note: ' ' })).toEqual({
     ok: true,
-    values: { fuel_cents: 0, toll_cents: 0, parking_cents: 0, other_cents: 0, notes: null },
+    values: { fuel_cents: 0, toll_cents: 0, parking_cents: 0, other_cents: 0, delivery_cents: 0, notes: null },
   });
-  expect(validateCosts({ fuel: '480,50', toll: 'R80', parking: '', other: '120', note: 'lunch' })).toEqual({
+  expect(validateCosts({ fuel: '480,50', toll: 'R80', parking: '', other: '120', delivery: '', note: 'lunch' })).toEqual({
     ok: true,
-    values: { fuel_cents: 48050, toll_cents: 8000, parking_cents: 0, other_cents: 12000, notes: 'lunch' },
+    values: { fuel_cents: 48050, toll_cents: 8000, parking_cents: 0, other_cents: 12000, delivery_cents: 0, notes: 'lunch' },
   });
-  expect(validateCosts({ fuel: '12.555', toll: '', parking: '', other: '', note: '' })).toEqual({
+  expect(validateCosts({ fuel: '12.555', toll: '', parking: '', other: '', delivery: '', note: '' })).toEqual({
     ok: false,
     errors: { fuel: 'Enter an amount like 480 or 480,50' },
   });
 });
 
 test('tripCost sums the four costs', () => {
-  expect(tripCost({ fuel_cents: 40000, toll_cents: 8000, parking_cents: 1000, other_cents: 500 })).toBe(49500);
+  expect(tripCost({ fuel_cents: 40000, toll_cents: 8000, parking_cents: 1000, other_cents: 500, delivery_cents: 0 })).toBe(49500);
+});
+
+test('tripCost includes delivery', () => {
+  expect(tripCost({ fuel_cents: 0, toll_cents: 0, parking_cents: 0, other_cents: 1000, delivery_cents: 5000 })).toBe(6000);
+});
+
+test('validateCosts parses delivery', () => {
+  const blank = { fuel: '', toll: '', parking: '', other: '', note: '' };
+  expect(validateCosts({ ...blank, delivery: '50' })).toMatchObject({ ok: true, values: { delivery_cents: 5000 } });
+  expect(validateCosts({ ...blank, delivery: '12.555' })).toEqual({ ok: false, errors: { delivery: 'Enter an amount like 480 or 480,50' } });
 });
