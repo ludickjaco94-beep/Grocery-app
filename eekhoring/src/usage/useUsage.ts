@@ -6,9 +6,17 @@ import type { Unit } from '@/items/itemRules';
 import { LAST_PRICE_SQL } from '@/list/listRepo';
 import { CURRENT_STOCK_SQL } from '@/stock/stockRepo';
 
-import { explainSuggestion, isRunningLow, monthlyUsage, suggestBuy, usageFor, type Dated, type Usage } from './usageRules';
+import { capRoom, explainSuggestion, isRunningLow, monthlyUsage, suggestBuy, usageFor, type Dated, type Usage } from './usageRules';
 
-export type ItemUsage = { usage: Usage; stock: number | null; toBuy: number | null; low: boolean; explain: string; groups: string[] };
+export type ItemUsage = {
+  usage: Usage;
+  stock: number | null;
+  toBuy: number | null;
+  low: boolean;
+  explain: string;
+  groups: string[];
+  cap: number | null;
+};
 
 export type ItemOption = { item_id: string; name: string; unit: string; holds: number; unitCents: number | null };
 
@@ -19,6 +27,7 @@ export type GroupUsage = {
   source: 'measured' | 'estimate' | 'none';
   stock: number;
   toBuy: number | null;
+  cap: number | null;
   options: (ItemOption & { perBase: number | null })[];
 };
 
@@ -88,6 +97,7 @@ export function useUsage(): { byItem: Map<string, ItemUsage>; byGroup: Map<strin
         ? `Bought as part of ${names.join(', ')}`
         : explainSuggestion(usage, { buffer_pct: i.buffer_pct, unit: i.unit, stock: current }, toBuy),
       groups: names,
+      cap: capRoom(usage.perMonth, i.max_months_cover, current),
     });
   }
 
@@ -103,7 +113,8 @@ export function useUsage(): { byItem: Map<string, ItemUsage>; byGroup: Map<strin
       need.push({ perMonth: u.usage.perMonth, stock: u.stock, holds: h, share: 1 / (groupsOf.get(i.id)?.length ?? 1) });
       options.push({ item_id: i.id, name: i.name, unit: i.unit, holds: h, unitCents: priceBy.get(i.id) ?? null });
     }
-    byGroup.set(g.id, { group: g, name: groupName(g), ...groupNeed(need, g), options: cheapestOption(options) });
+    const gn = groupNeed(need, g);
+    byGroup.set(g.id, { group: g, name: groupName(g), ...gn, cap: capRoom(gn.perMonth, g.max_months_cover, gn.stock), options: cheapestOption(options) });
   }
   return { byItem, byGroup, isLoading };
 }

@@ -64,9 +64,10 @@ export default function ListScreen() {
   const allGroups = new Map(
     useQuery<{ id: string; kind: string; person: string; base_unit: string }>('SELECT id, kind, person, base_unit FROM item_groups').data.map((g) => [g.id, g])
   );
-  const items = useQuery<{ id: string; name: string; unit: string; category: string; buy_mode: string }>(
-    'SELECT id, name, unit, category, buy_mode FROM items WHERE active = 1 ORDER BY name COLLATE NOCASE'
+  const items = useQuery<{ id: string; name: string; unit: string; category: string; buy_mode: string; max_months_cover: number }>(
+    'SELECT id, name, unit, category, buy_mode, max_months_cover FROM items WHERE active = 1 ORDER BY name COLLATE NOCASE'
   ).data;
+  const itemMonths = new Map(items.map((i) => [i.id, i.max_months_cover]));
   const custom = useQuery<{ name: string }>(CUSTOM_CATEGORIES_SQL).data.map((c) => c.name);
   const symbol = useQuery<{ currency_symbol: string | null }>('SELECT currency_symbol FROM settings LIMIT 1').data[0]?.currency_symbol ?? 'R';
   const money = (cents: number) => formatMoney(Math.round(cents), symbol);
@@ -127,10 +128,22 @@ export default function ListScreen() {
     ]);
   }
 
+  // Handover 5.6: going over the months-of-stock cap (e.g. stocking up on a special) asks first.
+  function saveQuantity(e: EntryRow, next: number) {
+    const cap = e.group_id ? byGroup.get(e.group_id)?.cap : e.item_id ? byItem.get(e.item_id)?.cap : null;
+    const months = e.group_id ? byGroup.get(e.group_id)?.group.max_months_cover : null;
+    const save = () => guard.run(() => setEntryQuantity(e.id, next));
+    if (cap === null || cap === undefined || next <= cap || next <= e.quantity) return save();
+    Alert.alert(`That's more than ${months ?? itemMonths.get(e.item_id ?? '') ?? 2} months of stock. Keep it?`, undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Keep', onPress: save },
+    ]);
+  }
+
   function step(e: EntryRow, sign: 1 | -1) {
     const next = roundQty(e.quantity + sign * stepOf(e.unit));
     setDrafts(({ [e.id]: _, ...rest }) => rest);
-    if (next > 0) return guard.run(() => setEntryQuantity(e.id, next));
+    if (next > 0) return saveQuantity(e, next);
     Alert.alert(`Remove ${e.name} from the list?`, undefined, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: () => guard.run(() => removeEntry(e.id)) },
@@ -141,7 +154,7 @@ export default function ListScreen() {
   function commitDraft(e: EntryRow) {
     const n = parseDecimal(drafts[e.id] ?? '');
     setDrafts(({ [e.id]: _, ...rest }) => rest);
-    if (typeof n === 'number' && n > 0 && roundQty(n) !== e.quantity) guard.run(() => setEntryQuantity(e.id, roundQty(n)));
+    if (typeof n === 'number' && n > 0 && roundQty(n) !== e.quantity) saveQuantity(e, roundQty(n));
   }
 
   function meta(e: EntryRow): string {

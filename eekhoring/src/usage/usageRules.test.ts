@@ -1,4 +1,4 @@
-import { explainSuggestion, isRunningLow, monthlyUsage, suggestBuy, usageFor } from './usageRules';
+import { capRoom, explainSuggestion, isRunningLow, monthlyUsage, suggestBuy, usageFor } from './usageRules';
 
 const day = (n: number, hour = 12) => new Date(Date.UTC(2026, 0, 1 + n, hour)).toISOString();
 const at = (n: number, quantity: number, hour = 12) => ({ date: day(n, hour), quantity });
@@ -109,4 +109,11 @@ test('explainSuggestion', () => {
   expect(explainSuggestion({ perMonth: 2, source: 'measured' }, { ...item, stock: null }, null)).toBe(
     'Used about 2/month, buffer 10%, not counted yet'
   );
+});
+
+test('capRoom is the most you can buy without passing the cap', () => {
+  expect(capRoom(4, 2, 1)).toBe(7);
+  expect(capRoom(4, 2, null)).toBe(8);
+  expect(capRoom(4, 2, 9)).toBe(0);
+  expect(capRoom(null, 2, 1)).toBeNull();
 });

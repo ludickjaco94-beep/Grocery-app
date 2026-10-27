@@ -76,3 +76,7 @@ export function explainSuggestion(u: Usage, i: { buffer_pct: number; unit: strin
     .filter(Boolean)
     .join(', ');
 }
+
+// Handover 5.6: the most a list quantity can be before it passes the months-of-stock cap.
+export const capRoom = (perMonth: number | null, maxMonths: number, stock: number | null) =>
+  perMonth === null ? null : Math.max(0, roundQty(perMonth * maxMonths - (stock ?? 0)));
