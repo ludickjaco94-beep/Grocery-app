@@ -127,3 +127,7 @@ test('purchaseDate: today is the save time, an earlier day is its start so a sam
   const stocktakeYesterdayMorning = new Date(new Date(dayRange(yesterday)[0]).getTime() + 3600 * 1000).toISOString();
   expect(stockDelta(null, { date: purchaseDate(yesterday, now), quantity: 1 }, stocktakeYesterdayMorning)).toBe(0);
 });
+
+test('normalPrice ignores emergency buys', () => {
+  expect(normalPrice([{ ...p('2026-01-01', 1500) }, { ...p('2026-02-01', 2500), is_emergency: 1 }])).toBe(1500);
+});

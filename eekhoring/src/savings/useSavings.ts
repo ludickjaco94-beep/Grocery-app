@@ -36,5 +36,7 @@ export function useSavings() {
       stores.data,
       tripCost(t)
     );
-  return { purchases: purchases.data, stores: stores.data, trips: trips.data, savingsOf, isLoading };
+  // A trip emptied by edits, with its costs moved on, is nothing to show.
+  const shown = trips.data.filter((t) => t.purchases > 0 || tripCost(t) > 0);
+  return { purchases: purchases.data, stores: stores.data, trips: shown, savingsOf, isLoading };
 }

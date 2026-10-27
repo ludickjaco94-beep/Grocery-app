@@ -98,10 +98,13 @@ export function purchaseToForm(v: PurchaseValues): PurchaseFormState {
 
 export const unitPriceCents = (totalCents: number, quantity: number) => totalCents / quantity;
 
-// Handover 5.6: median of the last 3 non-special unit prices, else the most recent one. Specials never count.
-export function normalPrice(rows: { date: string; quantity: number; total_price_cents: number; is_special: number }[]): number | null {
+// Handover 5.6: median of the last 3 non-special unit prices, else the most recent one.
+// Specials never count, and nor do emergency buys: a panic price at the corner shop isn't its normal price.
+export function normalPrice(
+  rows: { date: string; quantity: number; total_price_cents: number; is_special: number; is_emergency?: number }[]
+): number | null {
   const prices = rows
-    .filter((r) => !r.is_special)
+    .filter((r) => !r.is_special && !r.is_emergency)
     .sort((a, b) => (a.date < b.date ? 1 : -1))
     .map((r) => unitPriceCents(r.total_price_cents, r.quantity));
   if (!prices.length) return null;

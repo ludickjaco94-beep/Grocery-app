@@ -88,7 +88,8 @@ export function tripSavings(tripPurchases: P[], allPurchases: P[], stores: Store
 export function monthSavings(trips: { net: number; specialGain: number }[], monthPurchases: P[], allPurchases: P[], stores: Store[]) {
   const normals = normalsByStore(allPurchases);
   let penalty = 0;
-  for (const p of monthPurchases.filter((x) => x.is_emergency)) {
+  // Spec 5.5: emergency *local* purchases only.
+  for (const p of monthPurchases.filter((x) => x.is_emergency && !x.is_city)) {
     const cityUnit = lowest(p.item_id, normals, stores, true);
     if (cityUnit !== null) penalty += Math.max(0, unitPriceCents(p.total_price_cents, p.quantity) - cityUnit) * p.quantity;
   }

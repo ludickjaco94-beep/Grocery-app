@@ -104,3 +104,9 @@ test('weightTotals sums kg per item and Meat', () => {
 test('monthKey', () => {
   expect(monthKey(new Date(2026, 9, 31, 23, 0).toISOString())).toBe('2026-10');
 });
+
+test('monthSavings ignores emergencies bought at a city shop', () => {
+  const all = [p('milk', 'c', 1500)];
+  const month = [p('milk', 'c', 2000, { is_emergency: 1 })];
+  expect(monthSavings([], month, [...all, ...month], stores).penalty).toBe(0);
+});

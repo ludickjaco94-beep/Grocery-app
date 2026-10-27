@@ -38,3 +38,21 @@ export async function writeTripCosts(tx: Transaction, id: string, v: CostValues)
 export async function updateTripCosts(id: string, v: CostValues): Promise<void> {
   await db.writeTransaction((tx) => writeTripCosts(tx, id, v));
 }
+
+// When an edit moves a trip's last purchase to another trip, the costs go with it, so fuel never strands on an empty trip.
+export async function moveCostsIfEmptied(tx: Transaction, oldTripId: string | null, newTripId: string | null): Promise<void> {
+  if (!oldTripId || !newTripId || oldTripId === newTripId) return;
+  const left = await tx.get<{ n: number }>('SELECT COUNT(*) AS n FROM purchases WHERE trip_id = ?', [oldTripId]);
+  if (left.n > 0) return;
+  await tx.execute(
+    `UPDATE trips SET
+       fuel_cents = fuel_cents + (SELECT fuel_cents FROM trips WHERE id = ?),
+       toll_cents = toll_cents + (SELECT toll_cents FROM trips WHERE id = ?),
+       parking_cents = parking_cents + (SELECT parking_cents FROM trips WHERE id = ?),
+       other_cents = other_cents + (SELECT other_cents FROM trips WHERE id = ?),
+       notes = COALESCE(notes, (SELECT notes FROM trips WHERE id = ?))
+     WHERE id = ?`,
+    [oldTripId, oldTripId, oldTripId, oldTripId, oldTripId, newTripId]
+  );
+  await tx.execute('UPDATE trips SET fuel_cents = 0, toll_cents = 0, parking_cents = 0, other_cents = 0, notes = NULL WHERE id = ?', [oldTripId]);
+}

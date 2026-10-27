@@ -2,7 +2,7 @@ import type { Transaction } from '@powersync/react-native';
 import { randomUUID } from 'expo-crypto';
 
 import { db } from '@/db/db';
-import { ensureTrip } from '@/trips/tripRepo';
+import { ensureTrip, moveCostsIfEmptied } from '@/trips/tripRepo';
 
 import { applyStockDelta, stockDelta, type PurchaseValues } from './purchaseRules';
 
@@ -70,12 +70,16 @@ export async function addPurchase(p: PurchaseInput & { item_id: string }): Promi
 // The item never changes on edit: moving a purchase to another item would rewrite two histories.
 export async function updatePurchase(id: string, p: PurchaseInput): Promise<void> {
   await db.writeTransaction(async (tx) => {
-    const old = await tx.get<Dated & { item_id: string }>('SELECT item_id, date, quantity FROM purchases WHERE id = ?', [id]);
+    const old = await tx.get<Dated & { item_id: string; trip_id: string | null }>(
+      'SELECT item_id, date, quantity, trip_id FROM purchases WHERE id = ?',
+      [id]
+    );
     const row = await withTrip(tx, p);
     await tx.execute(`UPDATE purchases SET ${FIELDS.map((f) => `${f} = ?`).join(', ')} WHERE id = ?`, [
       ...FIELDS.map((f) => row[f]),
       id,
     ]);
+    await moveCostsIfEmptied(tx, old.trip_id, row.trip_id);
     await moveStock(tx, old.item_id, old, p, 'adjustment');
   });
 }
