@@ -5,9 +5,12 @@ import { suggestBuy } from '@/usage/usageRules';
 export type Measurable = { sold_by_weight: number; unit: string; contents_qty: number | null; contents_unit: string | null };
 
 // How much of a group's base unit one of this item holds (groups spec 5.1); null = can't be measured in it.
+// Count words are typed on a phone keyboard, so "Roll " and "roll" must match.
+const same = (a: string | null, b: string) => a !== null && a.trim().toLowerCase() === b.trim().toLowerCase();
+
 export function holds(i: Measurable, base: string): number | null {
-  if (i.sold_by_weight && i.unit === base) return 1;
-  if (i.contents_unit === base && i.contents_qty !== null && i.contents_qty > 0) return i.contents_qty;
+  if (i.sold_by_weight && same(i.unit, base)) return 1;
+  if (same(i.contents_unit, base) && i.contents_qty !== null && i.contents_qty > 0) return i.contents_qty;
   return null;
 }
 
@@ -92,8 +95,9 @@ export function groupNeed(
     : g.est_monthly_usage;
   const source = known.length ? 'measured' : perMonth !== null ? 'estimate' : 'none';
   const unit: Unit = g.base_unit === 'kg' || g.base_unit === 'L' ? g.base_unit : 'each';
+  // Groups spec 5.5: a group left with no items is never suggested, so it can't block a trip.
   const toBuy =
-    perMonth === null || g.buy_mode !== 'monthly'
+    !members.length || perMonth === null || g.buy_mode !== 'monthly'
       ? null
       : suggestBuy({ perMonth, buffer_pct: g.buffer_pct, max_months_cover: g.max_months_cover, stock, pack_size: null, sold_by_weight: 0, unit });
   return { perMonth, source, stock, toBuy };

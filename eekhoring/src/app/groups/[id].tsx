@@ -126,7 +126,9 @@ function GroupEditForm({ id, isNew, initial }: { id: string; isNew: boolean; ini
   }
 
   function onAddMember(m: MemberRow) {
-    if (holds(m, base) === null) return Alert.alert(`Set what ${m.name} holds in ${base} first`, 'Open the item and fill in Holds.');
+    // The saved unit, not an unsaved chip change: members are written at once.
+    if (holds(m, initial.baseUnit) === null)
+      return Alert.alert(`Set what ${m.name} holds in ${initial.baseUnit} first`, 'Open the item and fill in Holds.');
     return guard.run(async () => {
       await addMember(id, m.id);
       setSearch('');

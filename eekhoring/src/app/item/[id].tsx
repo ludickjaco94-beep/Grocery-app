@@ -98,7 +98,8 @@ function ItemEditForm({
     if (!result.ok) return setErrors(result.errors);
     // Groups spec 5.5: a unit change must not break a group the item is in.
     const broken = checkGroupUnits(result.values, myGroups);
-    if (broken) return setErrors({ contentsQty: broken });
+    // An alert, because the Holds field (where this error would sit) is hidden for sold-by-measure items.
+    if (broken) return Alert.alert('Can’t change the unit', broken);
     setErrors({});
     const dup = findDuplicate(result.values.name, names.data, isNew ? undefined : id);
     if (!dup) return save(result.values);

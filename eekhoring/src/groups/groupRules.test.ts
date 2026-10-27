@@ -95,3 +95,11 @@ test('hintCount', () => {
   expect(hintCount(6.1, 0.5)).toBe(13);
   expect(hintCount(30, 18)).toBe(2);
 });
+
+test('groupNeed with no members suggests nothing', () => {
+  expect(groupNeed([], { ...g, est_monthly_usage: 2 }).toBuy).toBeNull();
+});
+
+test('holds matches count words ignoring case and spaces', () => {
+  expect(holds({ sold_by_weight: 0, unit: 'pack', contents_qty: 18, contents_unit: 'Roll ' }, 'roll')).toBe(18);
+});

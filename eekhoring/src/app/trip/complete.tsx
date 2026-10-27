@@ -92,7 +92,8 @@ export default function CompleteTripScreen() {
     });
     return { entry: e, group: g, options, lines };
   });
-  const lines = cards.flatMap((c) => c.lines.map((l) => ({ ...l, entryId: c.entry.id })));
+  // A group with no items left can't be bought from: it's skipped and stays on the list, so it never blocks the trip.
+  const lines = cards.filter((c) => !c.group || c.options.length).flatMap((c) => c.lines.map((l) => ({ ...l, entryId: c.entry.id })));
 
   // Returns the switch that lets a successful save leave without the discard prompt.
   const allowLeave = usePreventRemove(Object.keys(typed).length > 0 || Object.keys(extra).length > 0, ({ repeat }) =>
@@ -165,14 +166,17 @@ export default function CompleteTripScreen() {
           <Text style={{ fontSize: font.body, fontWeight: '600', color: t.textPrimary, marginBottom: 8 }}>
             {c.group ? `${groupName(c.group)} · about ${c.entry.quantity} ${c.group.base_unit}` : c.entry.name}
           </Text>
-          {c.lines.map((l) => (
+          {c.group && !c.options.length ? (
+            <Text style={{ color: t.textSecondary, marginBottom: 12 }}>This group has no items left, so it stays on the list.</Text>
+          ) : null}
+          {(c.group && !c.options.length ? [] : c.lines).map((l) => (
             <View key={l.key} style={l.n > 0 ? { borderTopWidth: 1, borderTopColor: t.border, paddingTop: 12 } : undefined}>
               {c.group ? (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
                   {c.options.map((o) => (
                     <Chip key={o.id} label={o.name} on={l.itemId === o.id} onPress={() => type(l.key, { itemId: o.id })} />
                   ))}
-                  {c.options.length ? null : <Text style={{ color: t.textSecondary }}>This group has no items left.</Text>}
+                  
                 </View>
               ) : null}
               <Field label={`Quantity${l.unit ? ` (${l.unit})` : ''}`} value={l.quantity} onChangeText={(v) => type(l.key, { quantity: v })} decimal />
