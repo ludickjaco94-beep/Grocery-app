@@ -22,7 +22,10 @@ type Row = {
 export default function PricesScreen() {
   const t = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const item = useQuery<{ name: string; unit: string; sold_by_weight: number }>('SELECT name, unit, sold_by_weight FROM items WHERE id = ?', [id]).data[0];
+  const item = useQuery<{ name: string; unit: string; sold_by_weight: number; contents_qty: number | null; contents_unit: string | null }>(
+    'SELECT name, unit, sold_by_weight, contents_qty, contents_unit FROM items WHERE id = ?',
+    [id]
+  ).data[0];
   const rows = useQuery<Row>(
     `SELECT p.id, p.store_id, s.name AS store, s.is_city, p.date, p.quantity, p.total_price_cents, p.is_special,
             p.regular_price_cents, p.is_emergency
@@ -36,6 +39,9 @@ export default function PricesScreen() {
   const byStore = new Map<string, Row[]>();
   for (const r of rows) byStore.set(r.store_id, [...(byStore.get(r.store_id) ?? []), r]);
   const money = (cents: number) => formatMoney(Math.round(cents), symbol);
+  // Groups spec 5.3: a fair price per roll, L or kg across pack sizes.
+  const perContents = (unitCents: number) =>
+    item?.contents_qty && item.contents_unit ? ` · ${money(unitCents / item.contents_qty)} per ${item.contents_unit}` : '';
 
   return (
     <ScrollView style={{ backgroundColor: t.bg }} contentContainerStyle={{ padding: 16 }}>
@@ -60,7 +66,7 @@ export default function PricesScreen() {
               {list[0].is_city ? <Text style={{ fontSize: font.caption, color: t.textSecondary }}>  City</Text> : null}
             </Text>
             <Text style={{ fontSize: 20, fontWeight: '700', color: t.textPrimary, fontVariant: ['tabular-nums'], marginVertical: 6 }}>
-              {normal === null ? 'No normal price yet' : `Normal ${money(normal)} per ${per}`}
+              {normal === null ? 'No normal price yet' : `Normal ${money(normal)} per ${per}${perContents(normal)}`}
             </Text>
             {list.map((r) => (
               <Link key={r.id} href={`/purchase/${r.id}`} asChild>
@@ -86,7 +92,8 @@ export default function PricesScreen() {
                     ) : null}
                   </View>
                   <Text style={{ fontSize: font.body, fontWeight: '600', color: t.textPrimary, fontVariant: ['tabular-nums'] }}>
-                    {r.quantity} {per} · {money(unitPriceCents(r.total_price_cents, r.quantity))} per {per} · {money(r.total_price_cents)}
+                    {r.quantity} {per} · {money(unitPriceCents(r.total_price_cents, r.quantity))} per {per}
+                    {perContents(unitPriceCents(r.total_price_cents, r.quantity))} · {money(r.total_price_cents)}
                   </Text>
                   {r.is_special ? (
                     <Text style={{ fontSize: font.caption, color: t.textSecondary }}>
