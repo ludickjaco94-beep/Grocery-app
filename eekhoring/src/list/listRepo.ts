@@ -3,6 +3,8 @@ import { randomUUID } from 'expo-crypto';
 import { db } from '@/db/db';
 import { insertPurchase } from '@/purchases/purchaseRepo';
 import type { PurchaseValues } from '@/purchases/purchaseRules';
+import { ensureTrip, writeTripCosts } from '@/trips/tripRepo';
+import type { CostValues } from '@/trips/tripRules';
 
 import { planList, type Entry, type Suggestion } from './listRules';
 
@@ -65,9 +67,12 @@ export async function removeEntry(id: string): Promise<void> {
 export async function completeTrip(
   storeId: string,
   date: string,
-  rows: (PurchaseValues & { entryId: string; item_id: string })[]
+  rows: (PurchaseValues & { entryId: string; item_id: string })[],
+  // Set for a city shop: that day's trip costs, saved with the purchases.
+  costs: CostValues | null = null
 ): Promise<void> {
   await db.writeTransaction(async (tx) => {
+    if (costs) await writeTripCosts(tx, await ensureTrip(tx, date), costs);
     for (const { entryId, ...p } of rows) {
       await insertPurchase(tx, { ...p, store_id: storeId, date });
       await tx.execute('DELETE FROM list_entries WHERE id = ?', [entryId]);

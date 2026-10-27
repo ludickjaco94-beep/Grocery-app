@@ -8,12 +8,14 @@ import { DayStepper } from '@/components/DayStepper';
 import { Field } from '@/components/Field';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { StorePicker } from '@/components/StorePicker';
+import { TripCostFields } from '@/components/TripCostFields';
 import { cheapestOption, groupName, hintCount, holds, type Measurable } from '@/groups/groupRules';
 import { parseDecimal } from '@/items/itemRules';
 import { createGuard } from '@/lib/guard';
 import { completeTrip, LAST_PRICE_SQL } from '@/list/listRepo';
 import { prefillPrice, validateTrip } from '@/list/listRules';
-import { purchaseDate } from '@/purchases/purchaseRules';
+import { dayLabel, dayRange, purchaseDate } from '@/purchases/purchaseRules';
+import { costsToForm, validateCosts, type CostForm, type CostValues } from '@/trips/tripRules';
 import { font, radius } from '@/theme/theme';
 import { useTheme } from '@/theme/useTheme';
 
@@ -46,6 +48,8 @@ export default function CompleteTripScreen() {
   // Extra lines per group entry ("+ another product"); line 0 always exists.
   const [extra, setExtra] = useState<Record<string, number[]>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [typedCosts, setTypedCosts] = useState<Partial<CostForm>>({});
+  const [costErrors, setCostErrors] = useState<Partial<Record<keyof CostForm, string>>>({});
   const [guard] = useState(() => createGuard((e) => Alert.alert('Could not save', e instanceof Error ? e.message : String(e))));
 
   const lastStore = useQuery<{ store_id: string }>('SELECT store_id FROM purchases ORDER BY date DESC LIMIT 1').data[0]?.store_id;
@@ -65,6 +69,14 @@ export default function CompleteTripScreen() {
     useQuery<{ item_id: string; unit_cents: number }>(STORE_PRICE_SQL, [storeId ?? '']).data.map((p) => [p.item_id, p.unit_cents])
   );
   const priceOf = (itemId: string) => storePrice.get(itemId) ?? lastPrice.get(itemId) ?? null;
+  const isCity = !!useQuery<{ is_city: number }>('SELECT is_city FROM stores WHERE id = ?', [storeId ?? '']).data[0]?.is_city;
+  const [dayFrom, dayTo] = dayRange(day);
+  // That day's trip, if one exists: its costs prefill the fields, since a trip can span several city shops.
+  const dayTrip = useQuery<CostValues>(
+    'SELECT fuel_cents, toll_cents, parking_cents, other_cents, notes FROM trips WHERE date >= ? AND date < ? LIMIT 1',
+    [dayFrom, dayTo]
+  ).data[0];
+  const costs: CostForm = { ...(dayTrip ? costsToForm(dayTrip) : { fuel: '', toll: '', parking: '', other: '', note: '' }), ...typedCosts };
 
   const cards = entries.map((e) => {
     const g = e.group_id ? groups.get(e.group_id) : undefined;
@@ -96,7 +108,7 @@ export default function CompleteTripScreen() {
   const lines = cards.filter((c) => !c.group || c.options.length).flatMap((c) => c.lines.map((l) => ({ ...l, entryId: c.entry.id })));
 
   // Returns the switch that lets a successful save leave without the discard prompt.
-  const allowLeave = usePreventRemove(Object.keys(typed).length > 0 || Object.keys(extra).length > 0, ({ repeat }) =>
+  const allowLeave = usePreventRemove(Object.keys(typed).length > 0 || Object.keys(extra).length > 0 || Object.keys(typedCosts).length > 0, ({ repeat }) =>
     Alert.alert('Discard this trip?', undefined, [
       { text: 'Keep it', style: 'cancel' },
       { text: 'Discard', style: 'destructive', onPress: repeat },
@@ -119,9 +131,12 @@ export default function CompleteTripScreen() {
     const result = validateTrip(
       lines.map((l) => ({ key: l.key, entryId: l.entryId, itemId: l.itemId, quantity: l.quantity, price: l.price, soldByWeight: l.soldByWeight }))
     );
+    const tripCosts = isCity ? validateCosts(costs) : null;
+    setCostErrors(tripCosts && !tripCosts.ok ? tripCosts.errors : {});
     if (!result.ok) return setErrors(result.errors);
+    if (tripCosts && !tripCosts.ok) return;
     return guard.run(async () => {
-      await completeTrip(storeId, purchaseDate(day, new Date()), result.values);
+      await completeTrip(storeId, purchaseDate(day, new Date()), result.values, tripCosts ? tripCosts.values : null);
       allowLeave();
       router.back();
     });
@@ -146,6 +161,23 @@ export default function CompleteTripScreen() {
       <View style={{ marginTop: 12 }}>
         <DayStepper value={day} onChange={setDay} now={now} />
       </View>
+
+      {isCity ? (
+        <>
+          {section('Trip costs')}
+          <Text style={{ fontSize: font.caption, color: t.textSecondary, marginBottom: 8 }}>
+            {dayTrip ? `Adds to ${dayLabel(day, now)}'s trip` : 'A city shop: this starts a trip'}
+          </Text>
+          <TripCostFields
+            form={costs}
+            onChange={(k, v) => {
+              setTypedCosts((c) => ({ ...c, [k]: v }));
+              setCostErrors(({ [k]: _, ...rest }) => rest);
+            }}
+            errors={costErrors}
+          />
+        </>
+      ) : null}
 
       {section('Bought')}
       {cards.length ? null : <Text style={{ color: t.textSecondary }}>Nothing ticked on the list.</Text>}

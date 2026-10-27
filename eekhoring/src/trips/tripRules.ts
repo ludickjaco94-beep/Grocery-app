@@ -35,3 +35,5 @@ export const costsToForm = (t: CostValues): CostForm => ({
   other: t.other_cents ? (t.other_cents / 100).toFixed(2) : '',
   note: t.notes ?? '',
 });
+
+export const tripTitle = (iso: string) => new Date(iso).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
