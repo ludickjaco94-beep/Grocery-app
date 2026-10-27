@@ -11,14 +11,16 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { createItem, setItemActive, updateItem } from '@/items/itemRepo';
 import { emptyItemForm, findDuplicate, itemToForm, UNITS, validateItem, type ItemForm, type ItemValues } from '@/items/itemRules';
 import { createGuard } from '@/lib/guard';
+import { addToList } from '@/list/listRepo';
 import { font, radius } from '@/theme/theme';
 import { useTheme } from '@/theme/useTheme';
+import { useUsage } from '@/usage/useUsage';
 
 type ItemRow = ItemValues & { id: string; active: number };
 
 export default function ItemEditScreen() {
   const t = useTheme();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, list } = useLocalSearchParams<{ id: string; list?: string }>();
   const isNew = id === 'new';
   const existing = useQuery<ItemRow>('SELECT * FROM items WHERE id = ?', [id]);
   const settings = useQuery<{ default_buffer_pct: number | null }>('SELECT default_buffer_pct FROM settings LIMIT 1');
@@ -35,11 +37,26 @@ export default function ItemEditScreen() {
   const initial = isNew
     ? { ...emptyItemForm, category: 'Other', bufferPct: String(settings.data[0]?.default_buffer_pct ?? 10) }
     : itemToForm(item);
-  return <ItemEditForm id={id} item={isNew ? undefined : item} initial={initial} saved={custom.data.map((c) => c.name)} />;
+  return (
+    <ItemEditForm id={id} item={isNew ? undefined : item} initial={initial} saved={custom.data.map((c) => c.name)} fromList={list === '1'} />
+  );
 }
 
-function ItemEditForm({ id, item, initial, saved }: { id: string; item?: ItemRow; initial: ItemForm; saved: string[] }) {
+function ItemEditForm({
+  id,
+  item,
+  initial,
+  saved,
+  fromList,
+}: {
+  id: string;
+  item?: ItemRow;
+  initial: ItemForm;
+  saved: string[];
+  fromList: boolean;
+}) {
   const t = useTheme();
+  const explain = useUsage().byItem.get(id)?.explain;
   const isNew = !item;
   const names = useQuery<{ id: string; name: string }>('SELECT id, name FROM items WHERE active = 1');
   // A just-added category counts at once, before the live query catches up, so the chip never flashes back to Other.
@@ -57,8 +74,11 @@ function ItemEditForm({ id, item, initial, saved }: { id: string; item?: ItemRow
 
   const save = (values: ItemValues) =>
     guard.run(async () => {
-      if (isNew) await createItem(values);
-      else await updateItem(id, values);
+      if (isNew) {
+        const newId = await createItem(values);
+        // Spec 4.3: an item made while shopping goes on the list already ticked.
+        if (fromList) await addToList(newId, 1, true);
+      } else await updateItem(id, values);
       router.back();
     });
 
@@ -198,6 +218,7 @@ function ItemEditForm({ id, item, initial, saved }: { id: string; item?: ItemRow
       {form.soldByWeight ? null : field('packSize', 'Pack size (optional)', true)}
 
       {button(<PrimaryButton label="Save" onPress={onSave} />)}
+      {!isNew && explain ? <View style={{ marginTop: 16 }}>{hint(explain)}</View> : null}
       {!isNew
         ? button(
             <Link href={`/stock/${id}`} asChild>
