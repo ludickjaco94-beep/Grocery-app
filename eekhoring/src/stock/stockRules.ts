@@ -2,7 +2,7 @@ import { parseDecimal, type Unit } from '@/items/itemRules';
 
 export const roundQty = (n: number) => Math.round(n * 1000) / 1000;
 
-export const stepFor = (unit: Unit) => (unit === 'kg' ? 0.5 : 1);
+export const stepFor = (unit: Unit) => (unit === 'kg' || unit === 'L' ? 0.5 : 1);
 
 export type CountRow = { itemId: string; text: string; packs: boolean; kgPerPack: number | null };
 export type CountEntry = { item_id: string; quantity: number; entered_packs: number | null };

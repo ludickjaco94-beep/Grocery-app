@@ -1,6 +1,6 @@
 import { useQuery } from '@powersync/react-native';
 import { router, Stack, usePreventRemove } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Alert, ScrollView, Text, View } from 'react-native';
 
 import { DayStepper } from '@/components/DayStepper';
@@ -31,7 +31,6 @@ export default function CompleteTripScreen() {
   // Only what the owner typed; everything else is prefilled live, so a new shop or quantity re-prices untouched rows.
   const [typed, setTyped] = useState<Record<string, { quantity?: string; price?: string }>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [done, setDone] = useState(false);
   const [guard] = useState(() => createGuard((e) => Alert.alert('Could not save', e instanceof Error ? e.message : String(e))));
 
   const lastStore = useQuery<{ store_id: string }>('SELECT store_id FROM purchases ORDER BY date DESC LIMIT 1').data[0]?.store_id;
@@ -53,15 +52,13 @@ export default function CompleteTripScreen() {
     return { entry: e, quantity, price };
   });
 
-  usePreventRemove(Object.keys(typed).length > 0 && !done, ({ repeat }) =>
+  // Returns the switch that lets a successful save leave without the discard prompt.
+  const allowLeave = usePreventRemove(Object.keys(typed).length > 0, ({ repeat }) =>
     Alert.alert('Discard this trip?', undefined, [
       { text: 'Keep it', style: 'cancel' },
       { text: 'Discard', style: 'destructive', onPress: repeat },
     ])
   );
-  useEffect(() => {
-    if (done) router.back();
-  }, [done]);
 
   const type = (id: string, key: 'quantity' | 'price', value: string) => {
     setTyped((all) => ({ ...all, [id]: { ...all[id], [key]: value } }));
@@ -81,7 +78,8 @@ export default function CompleteTripScreen() {
         purchaseDate(day, new Date()),
         result.values.map((v) => ({ ...v, item_id: itemOf.get(v.entryId) as string }))
       );
-      setDone(true);
+      allowLeave();
+      router.back();
     });
   }
 
