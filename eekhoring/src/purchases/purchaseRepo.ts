@@ -38,14 +38,21 @@ async function moveStock(tx: Transaction, itemId: string, old: Dated | null, nex
   );
 }
 
-export async function addPurchase(p: PurchaseInput & { item_id: string }): Promise<string> {
+// For callers that write several purchases in one transaction (Complete trip).
+export async function insertPurchase(tx: Transaction, p: PurchaseInput & { item_id: string }): Promise<string> {
   const id = randomUUID();
+  await tx.execute(
+    `INSERT INTO purchases (id, item_id, ${FIELDS.join(', ')}) VALUES (?, ?, ${FIELDS.map(() => '?').join(', ')})`,
+    [id, p.item_id, ...FIELDS.map((f) => p[f])]
+  );
+  await moveStock(tx, p.item_id, null, p, 'purchase');
+  return id;
+}
+
+export async function addPurchase(p: PurchaseInput & { item_id: string }): Promise<string> {
+  let id = '';
   await db.writeTransaction(async (tx) => {
-    await tx.execute(
-      `INSERT INTO purchases (id, item_id, ${FIELDS.join(', ')}) VALUES (?, ?, ${FIELDS.map(() => '?').join(', ')})`,
-      [id, p.item_id, ...FIELDS.map((f) => p[f])]
-    );
-    await moveStock(tx, p.item_id, null, p, 'purchase');
+    id = await insertPurchase(tx, p);
   });
   return id;
 }
