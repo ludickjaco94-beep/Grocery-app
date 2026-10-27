@@ -94,6 +94,16 @@ list_entries
 - **Settings:** currency, buffer, usage window and stores are shared household settings.
 - The app keeps working fully offline after sharing is on.
 
+### 4.6 Owner additions (2026-10-27)
+
+- **Litres work like kg (phase 4).** `items.sold_by_weight` now means "sold by measure", with unit `kg` or `L`. Everything in 4.2 applies to L items as well. That covers the decimal quantity, the total paid with a live price per L, the optional bottle count, the packs mode in stock-take and rounding to 0.1. The reason: a bigger or smaller bottle, or a special, can work out cheaper, so prices must compare per L.
+- **Other trip costs (phase 5).** Besides fuel, toll and parking, a trip has an **Other** cost with a short note (e.g. a meal on the road), because some trip costs come up that aren't usual ones. It uses `trips.other_cents` and `trips.notes`, and it counts in the break-even exactly like fuel.
+- **Delivery from the city (phase 5).** A city order can be delivered instead of driven to. It arrives after a few days, and the fee is low or free. A trip gets `kind` (`'drive' | 'delivery'`) and `delivery_cents`. For a delivery, the trip cost is the delivery fee (plus Other), not fuel and toll, so the savings screen shows the bigger saving. Owner answers (2026-10-27):
+  - **Stock goes up on delivery, not on order.** An ordered item is a pending purchase until it arrives. Its date (and its stock effect under 4.1) is the day it arrives.
+  - **One order can arrive in parts.** Each line is marked delivered on its own, possibly on different days. A line can be part-delivered: for example, 6 ordered, 4 now, 2 later.
+  - **The supplier can cancel a line before delivery, and it's refunded.** A cancelled line (or the undelivered rest of one) never touches stock or the savings. Its money doesn't count as spent. It stays visible on the order as "cancelled, refunded".
+  - Phase 5 planning still decides the details: how a pending line is stored (likely a `status` of `'ordered' | 'delivered' | 'cancelled'` on purchases, or a separate `order_lines` table), and how the shopping list treats items still on order (likely as "on the way", not suggested again).
+
 ### 4.5 Phases (replaces handover section 7)
 
 1–6: as the handover, with 4.1–4.3 above built in from the start.
