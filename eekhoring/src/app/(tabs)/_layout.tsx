@@ -31,6 +31,13 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="format-list-checks" color={color as string} size={size} />,
         }}
       />
+      <Tabs.Screen
+        name="savings"
+        options={{
+          title: 'Savings',
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="piggy-bank-outline" color={color as string} size={size} />,
+        }}
+      />
     </Tabs>
   );
 }
