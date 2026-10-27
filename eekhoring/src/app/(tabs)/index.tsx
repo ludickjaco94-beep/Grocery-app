@@ -102,7 +102,7 @@ export default function ItemsScreen() {
                 muted={!item.active}
                 meta={[
                   item.buy_mode === 'as_needed' ? 'As needed' : 'Monthly',
-                  item.sold_by_weight ? 'by weight' : item.unit,
+                  item.sold_by_weight ? (item.unit === 'L' ? 'by volume' : 'by weight') : item.unit,
                   item.active ? null : 'archived',
                 ]
                   .filter(Boolean)

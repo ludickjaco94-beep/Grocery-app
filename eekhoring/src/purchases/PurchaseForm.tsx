@@ -25,7 +25,6 @@ export function PurchaseForm({
   symbol: string;
 }) {
   const t = useTheme();
-  const per = soldByWeight ? 'kg' : unit;
   const set = <K extends keyof PurchaseFormState>(key: K, value: PurchaseFormState[K]) => onChange({ ...form, [key]: value });
 
   const qty = parseDecimal(form.quantity);
@@ -40,7 +39,7 @@ export function PurchaseForm({
   return (
     <View>
       <Field
-        label={soldByWeight ? 'Weight (kg)' : `Quantity (${unit})`}
+        label={soldByWeight ? `${unit === 'L' ? 'Volume' : 'Weight'} (${unit})` : `Quantity (${unit})`}
         value={form.quantity}
         onChangeText={(v) => set('quantity', v)}
         error={errors.quantity}
@@ -57,7 +56,7 @@ export function PurchaseForm({
         value={form.price}
         onChangeText={(v) => set('price', v)}
         error={errors.price}
-        hint={perUnit === null ? undefined : `${formatMoney(Math.round(perUnit), symbol)} per ${per}`}
+        hint={perUnit === null ? undefined : `${formatMoney(Math.round(perUnit), symbol)} per ${unit}`}
         decimal
       />
       {soldByWeight ? (
@@ -74,7 +73,7 @@ export function PurchaseForm({
       {form.special ? (
         <>
           <Field
-            label={`Normal price per ${per} (optional)`}
+            label={`Normal price per ${unit} (optional)`}
             value={form.normalPrice}
             onChangeText={(v) => set('normalPrice', v)}
             error={errors.normalPrice}

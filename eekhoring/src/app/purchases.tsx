@@ -101,7 +101,7 @@ export default function PurchasesScreen() {
           <ItemCard
             name={item.name}
             icon={iconFor(item.category)}
-            meta={item.sold_by_weight ? 'by weight' : item.unit}
+            meta={item.sold_by_weight ? (item.unit === 'L' ? 'by volume' : 'by weight') : item.unit}
             right={<Chip label="Change" on={false} onPress={() => { setItem(null); setForm(emptyPurchaseForm); setErrors({}); }} />}
           />
           <PurchaseForm
@@ -138,7 +138,7 @@ export default function PurchasesScreen() {
           />
           {matches.map((m) => (
             <Pressable key={m.id} onPress={() => setItem(m)} accessibilityRole="button">
-              <ItemCard name={m.name} icon={iconFor(m.category)} meta={m.sold_by_weight ? 'by weight' : m.unit} right={null} />
+              <ItemCard name={m.name} icon={iconFor(m.category)} meta={m.sold_by_weight ? (m.unit === 'L' ? 'by volume' : 'by weight') : m.unit} right={null} />
             </Pressable>
           ))}
           {matches.length === 0 ? (

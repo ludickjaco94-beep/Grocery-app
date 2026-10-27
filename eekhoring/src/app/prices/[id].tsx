@@ -31,7 +31,7 @@ export default function PricesScreen() {
   ).data;
   const symbol = useQuery<{ currency_symbol: string | null }>('SELECT currency_symbol FROM settings LIMIT 1').data[0]?.currency_symbol ?? 'R';
 
-  const per = item?.sold_by_weight ? 'kg' : (item?.unit ?? '');
+  const per = item?.unit ?? '';
   // Rows are newest first, so Map insertion order puts the most recently used store first.
   const byStore = new Map<string, Row[]>();
   for (const r of rows) byStore.set(r.store_id, [...(byStore.get(r.store_id) ?? []), r]);

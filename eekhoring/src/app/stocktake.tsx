@@ -63,7 +63,7 @@ function StockTakeForm({ items, kgPerPack, custom }: { items: ItemRow[]; kgPerPa
 
   function bump(item: ItemRow, sign: 1 | -1) {
     const e = entry(item.id);
-    // The last count is in kg, so it is no starting point for a packs count.
+    // The last count is in kg or L, so it is no starting point for a packs count.
     set(item.id, { ...e, text: bumpCount(e.text, e.packs ? null : item.quantity, e.packs ? 1 : stepFor(item.unit), sign) });
   }
 
@@ -128,7 +128,7 @@ function StockTakeForm({ items, kgPerPack, custom }: { items: ItemRow[]; kgPerPa
               >
                 {item.sold_by_weight ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                    <Chip label="kg" on={!e.packs} onPress={() => e.packs && set(item.id, { text: '', packs: false })} />
+                    <Chip label={item.unit} on={!e.packs} onPress={() => e.packs && set(item.id, { text: '', packs: false })} />
                     {hasPacks ? (
                       // A number means something else in the other mode, so switching clears it.
                       <Chip label="packs" on={e.packs} onPress={() => !e.packs && set(item.id, { text: '', packs: true })} />

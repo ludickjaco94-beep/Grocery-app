@@ -70,3 +70,17 @@ test('cap error has no float noise', () => {
   expect(r.ok).toBe(false);
   if (!r.ok) expect(r.errors.maxMonthsCover).toBe('Cap must be at least 1.14 months to cover the 14% buffer');
 });
+
+test('sold by measure keeps L', () => {
+  expect(validateItem({ ...emptyItemForm, name: 'Oil', unit: 'L', soldByWeight: true, packSize: '2' })).toMatchObject({
+    ok: true,
+    values: { unit: 'L', sold_by_weight: 1, pack_size: null },
+  });
+});
+
+test('sold by measure turns each into kg', () => {
+  expect(validateItem({ ...emptyItemForm, name: 'Mince', unit: 'each', soldByWeight: true })).toMatchObject({
+    ok: true,
+    values: { unit: 'kg', sold_by_weight: 1 },
+  });
+});

@@ -73,7 +73,8 @@ export function validateItem(
     ok: true,
     values: {
       name,
-      unit: f.soldByWeight ? 'kg' : f.unit,
+      // Sold by measure (spec 4.6): kg or L, priced per unit across pack sizes.
+      unit: f.soldByWeight ? (f.unit === 'L' ? 'L' : 'kg') : f.unit,
       category: f.category.trim() || 'Other',
       buy_mode: f.buyMode,
       sold_by_weight: f.soldByWeight ? 1 : 0,

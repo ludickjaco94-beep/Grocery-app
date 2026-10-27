@@ -71,6 +71,8 @@ function ItemEditForm({
 
   const set = <K extends keyof ItemForm>(key: K, value: ItemForm[K]) => setForm((f) => ({ ...f, [key]: value }));
   const category = resolveCategory(form.category, custom);
+  // Matches validateItem: a sold-by-measure item is L or else kg.
+  const measure = form.unit === 'L' ? 'L' : 'kg';
 
   const save = (values: ItemValues) =>
     guard.run(async () => {
@@ -151,11 +153,11 @@ function ItemEditForm({
 
       {section(
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 48 }}>
-          {label('Sold by weight (kg)')}
+          {label('Sold by weight or volume')}
           <Switch
             value={form.soldByWeight}
             onValueChange={(v) => set('soldByWeight', v)}
-            accessibilityLabel="Sold by weight"
+            accessibilityLabel="Sold by weight or volume"
             trackColor={{ true: t.primary, false: t.border }}
             thumbColor={t.surface}
           />
@@ -163,7 +165,15 @@ function ItemEditForm({
       )}
 
       {form.soldByWeight
-        ? section(hint('Unit: kg. Prices show per kg.'))
+        ? section(
+            <>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Chip label="kg" on={measure === 'kg'} onPress={() => set('unit', 'kg')} />
+                <Chip label="L" on={measure === 'L'} onPress={() => set('unit', 'L')} />
+              </View>
+              {hint(`Unit: ${measure}. Prices show per ${measure}.`)}
+            </>
+          )
         : section(
             <>
               {label('Unit')}
@@ -214,7 +224,7 @@ function ItemEditForm({
 
       {field('bufferPct', 'Buffer %', true, 'Extra on top of average use')}
       {field('maxMonthsCover', 'Cap (months of stock)', true, 'Never suggest more than this')}
-      {field('estMonthlyUsage', `Monthly estimate (${form.soldByWeight ? 'kg' : form.unit})`, true, 'Used until two stock-takes exist')}
+      {field('estMonthlyUsage', `Monthly estimate (${form.soldByWeight ? measure : form.unit})`, true, 'Used until two stock-takes exist')}
       {form.soldByWeight ? null : field('packSize', 'Pack size (optional)', true)}
 
       {button(<PrimaryButton label="Save" onPress={onSave} />)}
