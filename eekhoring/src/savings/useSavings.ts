@@ -14,8 +14,11 @@ export type TripRow = {
   parking_cents: number;
   other_cents: number;
   notes: string | null;
+  kind: string | null;
+  delivery_cents: number;
   shops: string | null;
   purchases: number;
+  open_lines: number;
 };
 
 // shortcut: loads every purchase to work out normal prices, fine for a few thousand rows; aggregate in SQL if Savings gets slow
@@ -36,7 +39,7 @@ export function useSavings() {
       stores.data,
       tripCost(t)
     );
-  // A trip emptied by edits, with its costs moved on, is nothing to show.
-  const shown = trips.data.filter((t) => t.purchases > 0 || tripCost(t) > 0);
+  // A trip emptied by edits, with its costs moved on, is nothing to show. An order shows before anything arrives.
+  const shown = trips.data.filter((t) => t.purchases > 0 || tripCost(t) > 0 || t.kind === 'delivery');
   return { purchases: purchases.data, stores: stores.data, trips: shown, savingsOf, isLoading };
 }

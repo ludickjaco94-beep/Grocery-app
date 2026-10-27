@@ -7,13 +7,19 @@ import { ensureTrip, moveCostsIfEmptied } from '@/trips/tripRepo';
 import { applyStockDelta, stockDelta, type PurchaseValues } from './purchaseRules';
 
 type Dated = { date: string; quantity: number };
-type PurchaseInput = PurchaseValues & { store_id: string; date: string };
-type Row = PurchaseInput & { trip_id: string | null };
+type PurchaseInput = PurchaseValues & { store_id: string; date: string; order_line_id?: string | null };
+type Row = PurchaseInput & { trip_id: string | null; order_line_id: string | null };
 
 // A city purchase belongs to that day's trip; a local one to none. Re-run on every edit, so moving shop or day moves it.
+// A delivery always stays on its order.
 async function withTrip(tx: Transaction, p: PurchaseInput): Promise<Row> {
+  const order_line_id = p.order_line_id ?? null;
+  if (order_line_id) {
+    const line = await tx.get<{ trip_id: string }>('SELECT trip_id FROM order_lines WHERE id = ?', [order_line_id]);
+    return { ...p, order_line_id, trip_id: line.trip_id };
+  }
   const store = await tx.getOptional<{ is_city: number }>('SELECT is_city FROM stores WHERE id = ?', [p.store_id]);
-  return { ...p, trip_id: store?.is_city ? await ensureTrip(tx, p.date) : null };
+  return { ...p, order_line_id, trip_id: store?.is_city ? await ensureTrip(tx, p.date) : null };
 }
 
 const FIELDS = [
@@ -27,6 +33,7 @@ const FIELDS = [
   'is_emergency',
   'pack_count',
   'trip_id',
+  'order_line_id',
 ] as const;
 
 // Every purchase write also moves stock, inside the same transaction, so the two never disagree.
@@ -70,11 +77,11 @@ export async function addPurchase(p: PurchaseInput & { item_id: string }): Promi
 // The item never changes on edit: moving a purchase to another item would rewrite two histories.
 export async function updatePurchase(id: string, p: PurchaseInput): Promise<void> {
   await db.writeTransaction(async (tx) => {
-    const old = await tx.get<Dated & { item_id: string; trip_id: string | null }>(
-      'SELECT item_id, date, quantity, trip_id FROM purchases WHERE id = ?',
+    const old = await tx.get<Dated & { item_id: string; trip_id: string | null; order_line_id: string | null }>(
+      'SELECT item_id, date, quantity, trip_id, order_line_id FROM purchases WHERE id = ?',
       [id]
     );
-    const row = await withTrip(tx, p);
+    const row = await withTrip(tx, { ...p, order_line_id: old.order_line_id });
     await tx.execute(`UPDATE purchases SET ${FIELDS.map((f) => `${f} = ?`).join(', ')} WHERE id = ?`, [
       ...FIELDS.map((f) => row[f]),
       id,

@@ -37,8 +37,9 @@ const purchases = new Table(
     regular_price_cents: column.integer,
     special_note: column.text,
     pack_count: column.integer,
+    order_line_id: column.text, // set when the purchase is a delivery of an order line (spec 4.6)
   },
-  { indexes: { item: ['item_id'] } }
+  { indexes: { item: ['item_id'], order_line: ['order_line_id'] } }
 );
 
 const stock_counts = new Table(
@@ -60,7 +61,22 @@ const trips = new Table({
   parking_cents: column.integer,
   other_cents: column.integer,
   notes: column.text,
+  kind: column.text, // 'drive' | 'delivery'; null on trips from before 5b means drive
+  delivery_cents: column.integer,
 });
+
+// One line per item on a delivery order. Delivered quantity is the sum of its purchases, never stored.
+const order_lines = new Table(
+  {
+    trip_id: column.text,
+    item_id: column.text,
+    quantity: column.real,
+    total_price_cents: column.integer,
+    cancelled_qty: column.real,
+    created_at: column.text,
+  },
+  { indexes: { trip: ['trip_id'] } }
+);
 
 const settings = new Table({
   currency_symbol: column.text,
@@ -126,6 +142,7 @@ export const AppSchema = new Schema({
   people,
   item_groups,
   item_group_members,
+  order_lines,
 });
 
 export type Database = (typeof AppSchema)['types'];

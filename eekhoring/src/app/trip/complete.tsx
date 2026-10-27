@@ -73,10 +73,10 @@ export default function CompleteTripScreen() {
   const [dayFrom, dayTo] = dayRange(day);
   // That day's trip, if one exists: its costs prefill the fields, since a trip can span several city shops.
   const dayTrip = useQuery<CostValues>(
-    'SELECT fuel_cents, toll_cents, parking_cents, other_cents, notes FROM trips WHERE date >= ? AND date < ? LIMIT 1',
+    "SELECT fuel_cents, toll_cents, parking_cents, other_cents, COALESCE(delivery_cents, 0) AS delivery_cents, notes FROM trips WHERE date >= ? AND date < ? AND (kind IS NULL OR kind = 'drive') LIMIT 1",
     [dayFrom, dayTo]
   ).data[0];
-  const costs: CostForm = { ...(dayTrip ? costsToForm(dayTrip) : { fuel: '', toll: '', parking: '', other: '', note: '' }), ...typedCosts };
+  const costs: CostForm = { ...(dayTrip ? costsToForm(dayTrip) : { fuel: '', toll: '', parking: '', other: '', delivery: '', note: '' }), ...typedCosts };
 
   const cards = entries.map((e) => {
     const g = e.group_id ? groups.get(e.group_id) : undefined;
