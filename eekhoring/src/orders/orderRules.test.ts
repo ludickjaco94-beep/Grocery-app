@@ -1,4 +1,4 @@
-import { lineState, partPrice, refundCents, validateDelivery, withOnWay } from './orderRules';
+import { lineState, onWayBy, partPrice, refundCents, validateDelivery, withOnWay } from './orderRules';
 
 const l = (quantity: number, delivered: number, cancelled_qty: number) => lineState({ quantity, delivered, cancelled_qty });
 
@@ -35,4 +35,8 @@ test('withOnWay', () => {
   expect(withOnWay(null, 0)).toBeNull();
   expect(withOnWay(null, 4)).toBe(4);
   expect(withOnWay(3, 4)).toBe(7);
+});
+
+test('onWayBy rounds float noise', () => {
+  expect(onWayBy([{ item_id: 'mince', on_way: 0.3 - 0.1 }]).get('mince')).toBe(0.2);
 });

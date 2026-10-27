@@ -157,7 +157,12 @@ function TripDetail({ trip, data }: { trip: TripRow; data: ReturnType<typeof use
               <PrimaryButton
                 label="Everything arrived today"
                 variant="outline"
-                onPress={() => guard.run(() => deliverAll(trip.id, new Date().toISOString()))}
+                onPress={() =>
+                  Alert.alert('Mark everything as arrived today?', 'Stock goes up for every item still on the way.', [
+                    { text: 'Not yet', style: 'cancel' },
+                    { text: 'Everything arrived', onPress: () => guard.run(() => deliverAll(trip.id, new Date().toISOString())) },
+                  ])
+                }
               />
             </View>
           ) : null}

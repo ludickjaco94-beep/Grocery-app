@@ -5,7 +5,7 @@ import { cheapestOption, groupName, groupNeed, holds } from '@/groups/groupRules
 import type { Unit } from '@/items/itemRules';
 import { LAST_PRICE_SQL } from '@/list/listRepo';
 import { ON_WAY_SQL } from '@/orders/orderRepo';
-import { withOnWay } from '@/orders/orderRules';
+import { onWayBy as toOnWayMap, withOnWay } from '@/orders/orderRules';
 import { CURRENT_STOCK_SQL } from '@/stock/stockRepo';
 import { roundQty } from '@/stock/stockRules';
 
@@ -80,7 +80,7 @@ export function useUsage(): { byItem: Map<string, ItemUsage>; byGroup: Map<strin
   const boughtBy = group(bought.data);
   const stockBy = new Map(stock.data.map((s) => [s.item_id, s.quantity]));
   const priceBy = new Map(prices.data.map((p) => [p.item_id, p.unit_cents]));
-  const onWayBy = new Map(onWayRows.data.map((o) => [o.item_id, o.on_way]));
+  const onWayBy = toOnWayMap(onWayRows.data);
   const itemBy = new Map(items.data.map((i) => [i.id, i]));
   const groupBy = new Map(groups.data.map((g) => [g.id, g]));
   // Only active items in active groups count, so the 50/50 share follows archiving.

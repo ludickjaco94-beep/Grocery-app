@@ -33,3 +33,6 @@ export function validateDelivery(
 
 // Stock that counts for suggestions: what's here plus what's on the way.
 export const withOnWay = (stock: number | null, onWay: number) => (onWay ? (stock ?? 0) + onWay : stock);
+
+// Per item, rounded so a part delivery never shows float noise like 0.19999999999999998 kg.
+export const onWayBy = (rows: { item_id: string; on_way: number }[]) => new Map(rows.map((o) => [o.item_id, roundQty(o.on_way)]));
