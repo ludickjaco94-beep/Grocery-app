@@ -7,6 +7,8 @@ import { ItemCard } from '@/components/ItemCard';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { TripCostFields } from '@/components/TripCostFields';
 import { createGuard } from '@/lib/guard';
+import { deliverAll, ORDER_LINES_SQL, type OrderLine } from '@/orders/orderRepo';
+import { lineState, refundCents } from '@/orders/orderRules';
 import { formatMoney, unitPriceCents } from '@/purchases/purchaseRules';
 import { weightTotals } from '@/savings/savingsRules';
 import { useSavings, type TripRow } from '@/savings/useSavings';
@@ -40,6 +42,8 @@ function TripDetail({ trip, data }: { trip: TripRow; data: ReturnType<typeof use
   const nameOf = new Map(data.purchases.map((p) => [p.item_id, p.name]));
   const names = (ids: string[]) => ids.map((i) => nameOf.get(i) ?? '?').join(', ');
   const weights = weightTotals(bought);
+  const delivery = trip.kind === 'delivery';
+  const lines = useQuery<OrderLine>(ORDER_LINES_SQL, [trip.id]).data.map((l) => ({ ...l, ...lineState(l) }));
 
   const allowLeave = usePreventRemove(JSON.stringify(form) !== JSON.stringify(initial), ({ repeat }) =>
     Alert.alert('Discard changes?', undefined, [
@@ -86,7 +90,7 @@ function TripDetail({ trip, data }: { trip: TripRow; data: ReturnType<typeof use
 
   return (
     <ScrollView style={{ backgroundColor: t.bg }} contentContainerStyle={{ padding: 16 }} keyboardShouldPersistTaps="handled">
-      <Stack.Screen options={{ title: `Trip ${tripTitle(trip.date)}` }} />
+      <Stack.Screen options={{ title: `${delivery ? 'Order' : 'Trip'} ${tripTitle(trip.date)}` }} />
       {trip.shops ? <Text style={{ fontSize: font.caption, color: t.textSecondary }}>{trip.shops}</Text> : null}
 
       {section('Saving')}
@@ -99,8 +103,12 @@ function TripDetail({ trip, data }: { trip: TripRow; data: ReturnType<typeof use
           {line('Same basket locally', money(s.basketLocal))}
           {line('Paid (normal prices)', money(s.basketCity))}
           {line('Gross saving', money(s.gross))}
-          {line('Trip cost', money(s.breakEven))}
-          {note(`This trip needs ${money(s.breakEven)} gross saving to cover its costs`)}
+          {line(delivery ? 'Delivery fee' : 'Trip cost', money(s.breakEven))}
+          {note(
+            delivery
+              ? `This order needs ${money(s.breakEven)} gross saving to cover delivery`
+              : `This trip needs ${money(s.breakEven)} gross saving to cover its costs`
+          )}
           {s.specialGain ? (
             <>
               {line('Specials saved', money(s.specialGain))}
@@ -121,7 +129,42 @@ function TripDetail({ trip, data }: { trip: TripRow; data: ReturnType<typeof use
         </>
       )}
 
-      {section('Trip costs')}
+      {delivery ? (
+        <>
+          {section('Order')}
+          {lines.map((l) => {
+            const refund = refundCents(l);
+            const row = (
+              <ItemCard
+                name={l.name}
+                icon="cube-outline"
+                meta={[`${l.quantity} ${l.unit}`, money(l.total_price_cents), l.status, refund > 0 ? `${money(refund)} refunded` : null]
+                  .filter(Boolean)
+                  .join(' · ')}
+                right={null}
+              />
+            );
+            return l.open > 0 ? (
+              <Link key={l.id} href={`/order/${l.id}`} asChild>
+                <Pressable accessibilityRole="button">{row}</Pressable>
+              </Link>
+            ) : (
+              <View key={l.id}>{row}</View>
+            );
+          })}
+          {lines.some((l) => l.open > 0) ? (
+            <View style={{ flexDirection: 'row' }}>
+              <PrimaryButton
+                label="Everything arrived today"
+                variant="outline"
+                onPress={() => guard.run(() => deliverAll(trip.id, new Date().toISOString()))}
+              />
+            </View>
+          ) : null}
+        </>
+      ) : null}
+
+      {section(delivery ? 'Delivery costs' : 'Trip costs')}
       <TripCostFields
         kind={trip.kind === 'delivery' ? 'delivery' : 'drive'}
         form={form}
@@ -135,7 +178,7 @@ function TripDetail({ trip, data }: { trip: TripRow; data: ReturnType<typeof use
         <PrimaryButton label="Save costs" onPress={onSave} />
       </View>
 
-      {section(`Bought (${bought.length})`)}
+      {section(`${delivery ? 'Delivered' : 'Bought'} (${bought.length})`)}
       {bought.map((p) => (
         <Link key={p.id} href={`/purchase/${p.id}`} asChild>
           <Pressable accessibilityRole="button">

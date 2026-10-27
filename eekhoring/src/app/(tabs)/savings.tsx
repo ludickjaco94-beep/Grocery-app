@@ -87,9 +87,9 @@ export default function SavingsScreen() {
               <Link key={trip.id} href={`/trips/${trip.id}`} asChild>
                 <Pressable accessibilityRole="button">
                   <ItemCard
-                    name={tripTitle(trip.date)}
-                    icon="car-outline"
-                    meta={trip.shops ?? 'no purchases yet'}
+                    name={trip.kind === 'delivery' ? `Order ${tripTitle(trip.date)}` : tripTitle(trip.date)}
+                    icon={trip.kind === 'delivery' ? 'cube-outline' : 'car-outline'}
+                    meta={[trip.shops ?? 'no purchases yet', trip.open_lines ? `${trip.open_lines} on the way` : null].filter(Boolean).join(' · ')}
                     right={<Text style={{ fontSize: 16, fontWeight: '600', color: s.net >= 0 ? t.positive : t.danger, fontVariant: ['tabular-nums'] }}>{money(s.net)}</Text>}
                   />
                 </Pressable>
