@@ -10,63 +10,115 @@ import { ItemCard } from '@/components/ItemCard';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { QuantityStepper } from '@/components/QuantityStepper';
 import { Screen } from '@/components/Screen';
+import { groupName, hintCount } from '@/groups/groupRules';
 import type { Unit } from '@/items/itemRules';
 import { parseDecimal } from '@/items/itemRules';
 import { createGuard } from '@/lib/guard';
-import { addToList, LAST_PRICE_SQL, makeList, removeEntry, setEntryQuantity, setTicked } from '@/list/listRepo';
-import { estimateTotal } from '@/list/listRules';
+import { addGroupToList, addToList, LAST_PRICE_SQL, makeList, removeEntry, setEntryQuantity, setTicked } from '@/list/listRepo';
+import { estimateTotal, type Suggestion } from '@/list/listRules';
 import { formatMoney } from '@/purchases/purchaseRules';
 import { roundQty, stepFor } from '@/stock/stockRules';
 import { font } from '@/theme/theme';
 import { useTheme } from '@/theme/useTheme';
-import { useUsage } from '@/usage/useUsage';
+import { useUsage, type GroupUsage } from '@/usage/useUsage';
 
-type EntryRow = {
-  kind: 'entry';
+type EntryQuery = {
   id: string;
-  item_id: string;
+  item_id: string | null;
+  group_id: string | null;
   quantity: number;
   added_manually: number;
   ticked: number;
-  name: string;
-  unit: Unit;
-  category: string;
+  name: string | null;
+  unit: Unit | null;
+  category: string | null;
   unit_cents: number | null;
 };
-type ItemRow = { id: string; name: string; unit: Unit; category: string; buy_mode: string };
-type Row = EntryRow | (ItemRow & { kind: 'add' });
+// One list row, item or group; for a group, unit is its base unit and unit_cents the cheapest price per base unit.
+type EntryRow = Omit<EntryQuery, 'name' | 'unit' | 'category'> & {
+  kind: 'entry';
+  name: string;
+  unit: string;
+  category: string;
+  group: GroupUsage | null;
+};
+type AddRow = { kind: 'add' | 'addGroup'; id: string; name: string; unit: string; category: string };
+type Row = EntryRow | AddRow;
+
+const MAX_OPTIONS = 5;
+const stepOf = (unit: string) => stepFor((unit === 'kg' || unit === 'L' ? unit : 'each') as Unit);
 
 export default function ListScreen() {
   const t = useTheme();
-  const usage = useUsage().byItem;
+  const { byItem, byGroup } = useUsage();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [guard] = useState(() => createGuard((e) => Alert.alert('Could not save', e instanceof Error ? e.message : String(e))));
 
-  const entries = useQuery<Omit<EntryRow, 'kind'>>(
-    `SELECT e.id, e.item_id, e.quantity, e.added_manually, e.ticked, i.name, i.unit, i.category, lp.unit_cents
-     FROM list_entries e JOIN items i ON i.id = e.item_id
+  const raw = useQuery<EntryQuery>(
+    `SELECT e.id, e.item_id, e.group_id, e.quantity, e.added_manually, e.ticked, i.name, i.unit, i.category, lp.unit_cents
+     FROM list_entries e LEFT JOIN items i ON i.id = e.item_id
      LEFT JOIN (${LAST_PRICE_SQL}) lp ON lp.item_id = e.item_id
      ORDER BY i.name COLLATE NOCASE`
-  ).data.map((e) => ({ ...e, kind: 'entry' as const }));
-  const items = useQuery<ItemRow>('SELECT id, name, unit, category, buy_mode FROM items WHERE active = 1 ORDER BY name COLLATE NOCASE').data;
+  ).data;
+  // Archived groups keep their name, so a ticked entry for one still reads right.
+  const allGroups = new Map(
+    useQuery<{ id: string; kind: string; person: string; base_unit: string }>('SELECT id, kind, person, base_unit FROM item_groups').data.map((g) => [g.id, g])
+  );
+  const items = useQuery<{ id: string; name: string; unit: string; category: string; buy_mode: string }>(
+    'SELECT id, name, unit, category, buy_mode FROM items WHERE active = 1 ORDER BY name COLLATE NOCASE'
+  ).data;
   const custom = useQuery<{ name: string }>(CUSTOM_CATEGORIES_SQL).data.map((c) => c.name);
   const symbol = useQuery<{ currency_symbol: string | null }>('SELECT currency_symbol FROM settings LIMIT 1').data[0]?.currency_symbol ?? 'R';
+  const money = (cents: number) => formatMoney(Math.round(cents), symbol);
 
-  const listed = new Set(entries.map((e) => e.item_id));
-  const asNeeded = items.filter((i) => i.buy_mode === 'as_needed' && !listed.has(i.id)).map((i) => ({ ...i, kind: 'add' as const }));
-  const needsData = items.filter((i) => i.buy_mode === 'monthly' && usage.get(i.id)?.usage.source === 'none').length;
+  const entries: EntryRow[] = raw.map((e) => {
+    if (!e.group_id) return { ...e, kind: 'entry', name: e.name ?? '?', unit: e.unit ?? '', category: e.category ?? 'Other', group: null };
+    const g = byGroup.get(e.group_id) ?? null;
+    const info = allGroups.get(e.group_id);
+    return {
+      ...e,
+      kind: 'entry',
+      name: info ? groupName(info) : 'Group',
+      unit: info?.base_unit ?? '',
+      category: '',
+      unit_cents: g?.options[0]?.perBase ?? null,
+      group: g,
+    };
+  });
+  const itemEntries = entries.filter((e) => !e.group_id);
+  const groupEntries = entries.filter((e) => e.group_id);
+
+  const listedItems = new Set(itemEntries.map((e) => e.item_id));
+  const listedGroups = new Set(groupEntries.map((e) => e.group_id));
+  const asNeeded: AddRow[] = [
+    ...[...byGroup.values()]
+      .filter((g) => g.group.buy_mode === 'as_needed' && !listedGroups.has(g.group.id))
+      .map((g) => ({ kind: 'addGroup' as const, id: g.group.id, name: g.name, unit: g.group.base_unit, category: '' })),
+    ...items
+      .filter((i) => i.buy_mode === 'as_needed' && !listedItems.has(i.id) && !byItem.get(i.id)?.groups.length)
+      .map((i) => ({ ...i, kind: 'add' as const })),
+  ];
+  const needsData =
+    items.filter((i) => i.buy_mode === 'monthly' && !byItem.get(i.id)?.groups.length && byItem.get(i.id)?.usage.source === 'none').length +
+    [...byGroup.values()].filter((g) => g.group.buy_mode === 'monthly' && g.source === 'none').length;
   const total = estimateTotal(entries.map((e) => ({ quantity: e.quantity, unitCents: e.unit_cents })));
   const ticked = entries.filter((e) => e.ticked).length;
 
   const sections: { title: string; icon: string; data: Row[] }[] = [
-    ...groupByCategory(entries, custom, null),
+    ...(groupEntries.length ? [{ title: 'Groups', icon: 'swap-horizontal', data: groupEntries }] : []),
+    ...groupByCategory(itemEntries, custom, null),
     ...(asNeeded.length ? [{ title: 'As needed', icon: 'plus', data: asNeeded }] : []),
   ];
 
   function onMake() {
-    const suggestions = [...usage.entries()]
-      .filter(([, u]) => u.toBuy !== null && u.toBuy > 0)
-      .map(([item_id, u]) => ({ item_id, group_id: null, quantity: u.toBuy as number }));
+    const suggestions: Suggestion[] = [
+      ...[...byItem.entries()]
+        .filter(([, u]) => u.toBuy !== null && u.toBuy > 0)
+        .map(([item_id, u]) => ({ item_id, group_id: null, quantity: u.toBuy as number })),
+      ...[...byGroup.values()]
+        .filter((g) => g.toBuy !== null && g.toBuy > 0)
+        .map((g) => ({ item_id: null, group_id: g.group.id, quantity: g.toBuy as number })),
+    ];
     const run = () => guard.run(() => makeList(suggestions));
     if (!entries.length) return run();
     Alert.alert('Refresh suggestions?', 'Ticked and hand-added items stay.', [
@@ -76,7 +128,7 @@ export default function ListScreen() {
   }
 
   function step(e: EntryRow, sign: 1 | -1) {
-    const next = roundQty(e.quantity + sign * stepFor(e.unit));
+    const next = roundQty(e.quantity + sign * stepOf(e.unit));
     setDrafts(({ [e.id]: _, ...rest }) => rest);
     if (next > 0) return guard.run(() => setEntryQuantity(e.id, next));
     Alert.alert(`Remove ${e.name} from the list?`, undefined, [
@@ -92,22 +144,29 @@ export default function ListScreen() {
     if (typeof n === 'number' && n > 0 && roundQty(n) !== e.quantity) guard.run(() => setEntryQuantity(e.id, roundQty(n)));
   }
 
+  function meta(e: EntryRow): string {
+    const cost = e.unit_cents === null ? 'no price yet' : `about ${money(e.quantity * e.unit_cents)}`;
+    if (!e.group_id) return [cost, e.added_manually ? 'added' : null].filter(Boolean).join(' · ');
+    const cheapest = e.group?.options[0];
+    const hint = cheapest ? ` (${hintCount(e.quantity, cheapest.holds)} × ${cheapest.name})` : '';
+    return [`about ${e.quantity} ${e.unit}${hint}`, cost, e.group ? null : 'group archived', e.added_manually ? 'added' : null]
+      .filter(Boolean)
+      .join(' · ');
+  }
+
   const caption = { fontSize: font.caption, color: t.textSecondary };
 
   return (
     <Screen>
       <Text style={{ ...caption, marginBottom: 8 }}>
-        {[
-          `${entries.length} items · about ${formatMoney(total.cents, symbol)}`,
-          total.unpriced ? `${total.unpriced} without a price` : null,
-        ]
+        {[`${entries.length} items · about ${money(total.cents)}`, total.unpriced ? `${total.unpriced} without a price` : null]
           .filter(Boolean)
           .join(' · ')}
       </Text>
       <View style={{ flexDirection: 'row' }}>
         <PrimaryButton label={entries.length ? 'Refresh' : 'Make list'} variant="outline" onPress={onMake} />
       </View>
-      {needsData ? <Text style={{ ...caption, marginTop: 8 }}>{needsData} monthly items need data</Text> : null}
+      {needsData ? <Text style={{ ...caption, marginTop: 8 }}>{needsData} items or groups need data</Text> : null}
       {entries.length ? null : (
         <Text style={{ textAlign: 'center', color: t.textSecondary, marginTop: 24 }}>No list yet. Tap Make list after a stock-take.</Text>
       )}
@@ -122,12 +181,18 @@ export default function ListScreen() {
           </Text>
         )}
         renderItem={({ item, section }) =>
-          item.kind === 'add' ? (
+          item.kind !== 'entry' ? (
             <ItemCard
               name={item.name}
-              icon={section.icon}
-              meta={item.unit}
-              right={<Chip label="Add" on={false} onPress={() => guard.run(() => addToList(item.id, 1, false))} />}
+              icon={item.kind === 'addGroup' ? 'swap-horizontal' : section.icon}
+              meta={item.kind === 'addGroup' ? `group · per ${item.unit}` : item.unit}
+              right={
+                <Chip
+                  label="Add"
+                  on={false}
+                  onPress={() => guard.run(() => (item.kind === 'addGroup' ? addGroupToList(item.id, 1, false) : addToList(item.id, 1, false)))}
+                />
+              }
             />
           ) : (
             <Pressable
@@ -138,14 +203,9 @@ export default function ListScreen() {
             >
               <ItemCard
                 name={item.ticked ? `✓ ${item.name}` : item.name}
-                icon={section.icon}
+                icon={item.group_id ? 'swap-horizontal' : section.icon}
                 muted={!!item.ticked}
-                meta={[
-                  item.unit_cents === null ? 'no price yet' : `about ${formatMoney(Math.round(item.quantity * item.unit_cents), symbol)}`,
-                  item.added_manually ? 'added' : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
+                meta={meta(item)}
                 right={
                   <QuantityStepper
                     value={drafts[item.id] ?? String(item.quantity)}
@@ -157,12 +217,27 @@ export default function ListScreen() {
                     label={item.name}
                   />
                 }
-              />
+              >
+                {item.group && !item.ticked ? (
+                  <View style={{ marginTop: 8, marginLeft: 56, gap: 2 }}>
+                    {item.group.options.slice(0, MAX_OPTIONS).map((o, i) => (
+                      <Text key={o.item_id} style={caption}>
+                        {o.name} · {o.perBase === null ? 'no price yet' : `${money(o.perBase)} per ${item.unit}`}
+                        {i === 0 && o.perBase !== null ? <Text style={{ color: t.primary, fontWeight: '700' }}>  cheapest</Text> : null}
+                      </Text>
+                    ))}
+                    {item.group.options.length > MAX_OPTIONS ? <Text style={caption}>+{item.group.options.length - MAX_OPTIONS} more</Text> : null}
+                  </View>
+                ) : null}
+              </ItemCard>
             </Pressable>
           )
         }
         ListFooterComponent={
-          <View style={{ flexDirection: 'row', paddingTop: 8 }}>
+          <View style={{ flexDirection: 'row', gap: 8, paddingTop: 8 }}>
+            <Link href="/groups" asChild>
+              <PrimaryButton label="Groups" variant="outline" />
+            </Link>
             <Link href={{ pathname: '/item/[id]', params: { id: 'new', list: '1' } }} asChild>
               <PrimaryButton label="+ New item" variant="outline" />
             </Link>
