@@ -59,12 +59,14 @@ export function ItemCard({
   );
 }
 
-export function StockNumber({ quantity, unit }: { quantity: number | null; unit: string }) {
+// 'low' uses warning, which only passes contrast as large text: keep the number at 20 bold.
+export function StockNumber({ quantity, unit, tone = 'normal' }: { quantity: number | null; unit: string; tone?: 'normal' | 'low' | 'out' }) {
   const t = useTheme();
   if (quantity === null) return <Text style={{ fontSize: font.caption, color: t.textSecondary }}>not counted</Text>;
+  const color = { normal: t.textPrimary, low: t.warning, out: t.danger }[tone];
   return (
     <View style={{ alignItems: 'flex-end' }}>
-      <Text style={{ fontSize: 20, fontWeight: '700', color: t.textPrimary, fontVariant: ['tabular-nums'] }}>{quantity}</Text>
+      <Text style={{ fontSize: 20, fontWeight: '700', color, fontVariant: ['tabular-nums'] }}>{quantity}</Text>
       <Text style={{ fontSize: font.caption, color: t.textSecondary }}>{unit} left</Text>
     </View>
   );

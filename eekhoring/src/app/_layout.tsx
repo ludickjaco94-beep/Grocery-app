@@ -17,7 +17,9 @@ export default function RootLayout() {
           headerShadowVisible: false,
           contentStyle: { backgroundColor: t.bg },
         }}
-      />
+      >
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      </Stack>
     </PowerSyncContext.Provider>
   );
 }

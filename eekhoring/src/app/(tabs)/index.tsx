@@ -1,5 +1,5 @@
 import { useQuery } from '@powersync/react-native';
-import { Link, Stack } from 'expo-router';
+import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, SectionList, Switch, Text, TextInput, View } from 'react-native';
 
@@ -12,6 +12,7 @@ import { Screen } from '@/components/Screen';
 import { CURRENT_STOCK_SQL } from '@/stock/stockRepo';
 import { font, radius } from '@/theme/theme';
 import { useTheme } from '@/theme/useTheme';
+import { useUsage } from '@/usage/useUsage';
 
 type Row = {
   id: string;
@@ -29,6 +30,7 @@ export default function ItemsScreen() {
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const usage = useUsage().byItem;
   const { data } = useQuery<Row>(
     `SELECT id, name, unit, category, buy_mode, sold_by_weight, active, cs.quantity FROM items
      LEFT JOIN (${CURRENT_STOCK_SQL}) cs ON cs.item_id = items.id
@@ -51,7 +53,6 @@ export default function ItemsScreen() {
 
   return (
     <Screen>
-      <Stack.Screen options={{ title: 'Stock' }} />
       <Text style={{ fontSize: font.caption, color: t.textSecondary, marginBottom: 12 }}>{sub}</Text>
       <TextInput
         style={{
@@ -106,7 +107,13 @@ export default function ItemsScreen() {
                 ]
                   .filter(Boolean)
                   .join(' · ')}
-                right={<StockNumber quantity={item.quantity} unit={item.unit} />}
+                right={
+                  <StockNumber
+                    quantity={item.quantity}
+                    unit={item.unit}
+                    tone={item.quantity === 0 ? 'out' : usage.get(item.id)?.low ? 'low' : 'normal'}
+                  />
+                }
               />
             </Pressable>
           </Link>
