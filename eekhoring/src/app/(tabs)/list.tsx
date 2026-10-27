@@ -1,5 +1,5 @@
 import { useQuery } from '@powersync/react-native';
-import { Link } from 'expo-router';
+import { Link, router } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, SectionList, Text, View } from 'react-native';
 
@@ -16,6 +16,7 @@ import { parseDecimal } from '@/items/itemRules';
 import { createGuard } from '@/lib/guard';
 import { addGroupToList, addToList, LAST_PRICE_SQL, makeList, removeEntry, setEntryQuantity, setTicked } from '@/list/listRepo';
 import { estimateTotal, type Suggestion } from '@/list/listRules';
+import { OPEN_ORDERS_SQL } from '@/orders/orderRepo';
 import { formatMoney } from '@/purchases/purchaseRules';
 import { roundQty, stepFor } from '@/stock/stockRules';
 import { font } from '@/theme/theme';
@@ -70,6 +71,7 @@ export default function ListScreen() {
   const itemMonths = new Map(items.map((i) => [i.id, i.max_months_cover]));
   const custom = useQuery<{ name: string }>(CUSTOM_CATEGORIES_SQL).data.map((c) => c.name);
   const symbol = useQuery<{ currency_symbol: string | null }>('SELECT currency_symbol FROM settings LIMIT 1').data[0]?.currency_symbol ?? 'R';
+  const orders = useQuery<{ id: string; shop: string; open_lines: number }>(OPEN_ORDERS_SQL).data;
   const money = (cents: number) => formatMoney(Math.round(cents), symbol);
 
   const entries: EntryRow[] = raw.map((e) => {
@@ -159,10 +161,12 @@ export default function ListScreen() {
 
   function meta(e: EntryRow): string {
     const cost = e.unit_cents === null ? 'no price yet' : `about ${money(e.quantity * e.unit_cents)}`;
-    if (!e.group_id) return [cost, e.added_manually ? 'added' : null].filter(Boolean).join(' · ');
+    const onWay = e.group_id ? (e.group?.onWay ?? 0) : e.item_id ? (byItem.get(e.item_id)?.onWay ?? 0) : 0;
+    const coming = onWay ? `${onWay} ${e.unit} on the way` : null;
+    if (!e.group_id) return [cost, coming, e.added_manually ? 'added' : null].filter(Boolean).join(' · ');
     const cheapest = e.group?.options[0];
     const hint = cheapest ? ` (${hintCount(e.quantity, cheapest.holds)} × ${cheapest.name})` : '';
-    return [`about ${e.quantity} ${e.unit}${hint}`, cost, e.group ? null : 'group archived', e.added_manually ? 'added' : null]
+    return [`about ${e.quantity} ${e.unit}${hint}`, cost, coming, e.group ? null : 'group archived', e.added_manually ? 'added' : null]
       .filter(Boolean)
       .join(' · ');
   }
@@ -180,6 +184,13 @@ export default function ListScreen() {
         <PrimaryButton label={entries.length ? 'Refresh' : 'Make list'} variant="outline" onPress={onMake} />
       </View>
       {needsData ? <Text style={{ ...caption, marginTop: 8 }}>{needsData} items or groups need data</Text> : null}
+      {orders.map((o) => (
+        <Link key={o.id} href={`/trips/${o.id}`} asChild>
+          <Pressable accessibilityRole="button" style={{ marginTop: 8 }}>
+            <ItemCard name={`Order from ${o.shop}`} icon="cube-outline" meta={`${o.open_lines} on the way`} right={null} />
+          </Pressable>
+        </Link>
+      ))}
       {entries.length ? null : (
         <Text style={{ textAlign: 'center', color: t.textSecondary, marginTop: 24 }}>No list yet. Tap Make list after a stock-take.</Text>
       )}
@@ -257,10 +268,16 @@ export default function ListScreen() {
           </View>
         }
       />
-      <View style={{ flexDirection: 'row', paddingTop: 8, paddingBottom: 16 }}>
+      <View style={{ flexDirection: 'row', gap: 8, paddingTop: 8, paddingBottom: 16 }}>
         <Link href="/trip/complete" asChild disabled={!ticked}>
           <PrimaryButton label={`Complete trip (${ticked})`} disabled={!ticked} />
         </Link>
+        <PrimaryButton
+          label={`Place order (${ticked})`}
+          variant="outline"
+          disabled={!ticked}
+          onPress={() => router.push({ pathname: '/trip/complete', params: { mode: 'order' } })}
+        />
       </View>
     </Screen>
   );

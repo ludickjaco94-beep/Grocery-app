@@ -4,7 +4,10 @@ import { GROUPS_SQL, type GroupRow } from '@/groups/groupRepo';
 import { cheapestOption, groupName, groupNeed, holds } from '@/groups/groupRules';
 import type { Unit } from '@/items/itemRules';
 import { LAST_PRICE_SQL } from '@/list/listRepo';
+import { ON_WAY_SQL } from '@/orders/orderRepo';
+import { withOnWay } from '@/orders/orderRules';
 import { CURRENT_STOCK_SQL } from '@/stock/stockRepo';
+import { roundQty } from '@/stock/stockRules';
 
 import { capRoom, explainSuggestion, isRunningLow, monthlyUsage, suggestBuy, usageFor, type Dated, type Usage } from './usageRules';
 
@@ -16,6 +19,7 @@ export type ItemUsage = {
   explain: string;
   groups: string[];
   cap: number | null;
+  onWay: number;
 };
 
 export type ItemOption = { item_id: string; name: string; unit: string; holds: number; unitCents: number | null };
@@ -28,6 +32,7 @@ export type GroupUsage = {
   stock: number;
   toBuy: number | null;
   cap: number | null;
+  onWay: number;
   options: (ItemOption & { perBase: number | null })[];
 };
 
@@ -66,14 +71,16 @@ export function useUsage(): { byItem: Map<string, ItemUsage>; byGroup: Map<strin
     'SELECT m.group_id, m.item_id FROM item_group_members m JOIN item_groups g ON g.id = m.group_id WHERE g.active = 1'
   );
   const prices = useQuery<{ item_id: string; unit_cents: number | null }>(LAST_PRICE_SQL);
+  const onWayRows = useQuery<{ item_id: string; on_way: number }>(ON_WAY_SQL);
 
-  const isLoading = [items, takes, bought, stock, settings, groups, members, prices].some((q) => q.isLoading);
+  const isLoading = [items, takes, bought, stock, settings, groups, members, prices, onWayRows].some((q) => q.isLoading);
   const months = settings.data[0]?.usage_window_months ?? 3;
   const now = new Date();
   const takesBy = group(takes.data);
   const boughtBy = group(bought.data);
   const stockBy = new Map(stock.data.map((s) => [s.item_id, s.quantity]));
   const priceBy = new Map(prices.data.map((p) => [p.item_id, p.unit_cents]));
+  const onWayBy = new Map(onWayRows.data.map((o) => [o.item_id, o.on_way]));
   const itemBy = new Map(items.data.map((i) => [i.id, i]));
   const groupBy = new Map(groups.data.map((g) => [g.id, g]));
   // Only active items in active groups count, so the 50/50 share follows archiving.
@@ -84,10 +91,13 @@ export function useUsage(): { byItem: Map<string, ItemUsage>; byGroup: Map<strin
   for (const i of items.data) {
     const usage = usageFor(monthlyUsage(takesBy.get(i.id) ?? [], boughtBy.get(i.id) ?? [], now, months), i.est_monthly_usage);
     const current = stockBy.get(i.id) ?? null;
+    const onWay = onWayBy.get(i.id) ?? 0;
+    // What's on the way counts as stock for suggestions and the cap, not for "running low".
+    const counted = withOnWay(current, onWay);
     const names = (groupsOf.get(i.id) ?? []).map((m) => groupName(groupBy.get(m.group_id) as GroupRow));
     // A grouped item's need goes through its group(s): it never gets a list row of its own.
     const toBuy =
-      !names.length && i.buy_mode === 'monthly' && usage.perMonth !== null ? suggestBuy({ ...i, perMonth: usage.perMonth, stock: current }) : null;
+      !names.length && i.buy_mode === 'monthly' && usage.perMonth !== null ? suggestBuy({ ...i, perMonth: usage.perMonth, stock: counted }) : null;
     byItem.set(i.id, {
       usage,
       stock: current,
@@ -97,7 +107,8 @@ export function useUsage(): { byItem: Map<string, ItemUsage>; byGroup: Map<strin
         ? `Bought as part of ${names.join(', ')}`
         : explainSuggestion(usage, { buffer_pct: i.buffer_pct, unit: i.unit, stock: current }, toBuy),
       groups: names,
-      cap: capRoom(usage.perMonth, i.max_months_cover, current),
+      cap: capRoom(usage.perMonth, i.max_months_cover, counted),
+      onWay,
     });
   }
 
@@ -105,16 +116,18 @@ export function useUsage(): { byItem: Map<string, ItemUsage>; byGroup: Map<strin
   for (const g of groups.data) {
     const options: ItemOption[] = [];
     const need: Parameters<typeof groupNeed>[0] = [];
+    let onWay = 0;
     for (const m of live.filter((x) => x.group_id === g.id)) {
       const i = itemBy.get(m.item_id) as ItemRow;
       const h = holds(i, g.base_unit);
       if (h === null) continue;
       const u = byItem.get(i.id) as ItemUsage;
-      need.push({ perMonth: u.usage.perMonth, stock: u.stock, holds: h, share: 1 / (groupsOf.get(i.id)?.length ?? 1) });
+      need.push({ perMonth: u.usage.perMonth, stock: withOnWay(u.stock, u.onWay), holds: h, share: 1 / (groupsOf.get(i.id)?.length ?? 1) });
+      onWay += u.onWay * h;
       options.push({ item_id: i.id, name: i.name, unit: i.unit, holds: h, unitCents: priceBy.get(i.id) ?? null });
     }
     const gn = groupNeed(need, g);
-    byGroup.set(g.id, { group: g, name: groupName(g), ...gn, cap: capRoom(gn.perMonth, g.max_months_cover, gn.stock), options: cheapestOption(options) });
+    byGroup.set(g.id, { group: g, name: groupName(g), ...gn, cap: capRoom(gn.perMonth, g.max_months_cover, gn.stock), onWay: roundQty(onWay), options: cheapestOption(options) });
   }
   return { byItem, byGroup, isLoading };
 }

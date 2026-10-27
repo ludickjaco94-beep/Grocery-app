@@ -123,6 +123,7 @@ function TripDetail({ trip, data }: { trip: TripRow; data: ReturnType<typeof use
 
       {section('Trip costs')}
       <TripCostFields
+        kind={trip.kind === 'delivery' ? 'delivery' : 'drive'}
         form={form}
         onChange={(k, v) => {
           setForm((f) => ({ ...f, [k]: v }));

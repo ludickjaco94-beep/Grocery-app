@@ -1,5 +1,5 @@
 import { useQuery } from '@powersync/react-native';
-import { router, Stack, usePreventRemove } from 'expo-router';
+import { router, Stack, useLocalSearchParams, usePreventRemove } from 'expo-router';
 import { useState } from 'react';
 import { Alert, ScrollView, Text, View } from 'react-native';
 
@@ -13,6 +13,7 @@ import { cheapestOption, groupName, hintCount, holds, type Measurable } from '@/
 import { parseDecimal } from '@/items/itemRules';
 import { createGuard } from '@/lib/guard';
 import { completeTrip, LAST_PRICE_SQL } from '@/list/listRepo';
+import { placeOrder } from '@/orders/orderRepo';
 import { prefillPrice, validateTrip } from '@/list/listRules';
 import { dayLabel, dayRange, purchaseDate } from '@/purchases/purchaseRules';
 import { costsToForm, validateCosts, type CostForm, type CostValues } from '@/trips/tripRules';
@@ -37,8 +38,10 @@ const STORE_PRICE_SQL = `SELECT p.item_id, p.total_price_cents * 1.0 / p.quantit
   WHERE p.store_id = ? AND p.is_special = 0 AND p.date = (
     SELECT MAX(date) FROM purchases WHERE item_id = p.item_id AND store_id = p.store_id AND is_special = 0)`;
 
+// Also Place order (`?mode=order`, spec 4.6): the same lines, but saved as an order whose stock comes on delivery.
 export default function CompleteTripScreen() {
   const t = useTheme();
+  const ordering = useLocalSearchParams<{ mode?: string }>().mode === 'order';
   const [now] = useState(() => new Date());
   const [day, setDay] = useState(() => now.toISOString());
   const [pickedStore, setPickedStore] = useState<string | null>(null);
@@ -76,7 +79,10 @@ export default function CompleteTripScreen() {
     "SELECT fuel_cents, toll_cents, parking_cents, other_cents, COALESCE(delivery_cents, 0) AS delivery_cents, notes FROM trips WHERE date >= ? AND date < ? AND (kind IS NULL OR kind = 'drive') LIMIT 1",
     [dayFrom, dayTo]
   ).data[0];
-  const costs: CostForm = { ...(dayTrip ? costsToForm(dayTrip) : { fuel: '', toll: '', parking: '', other: '', delivery: '', note: '' }), ...typedCosts };
+  const costs: CostForm = {
+    ...(dayTrip && !ordering ? costsToForm(dayTrip) : { fuel: '', toll: '', parking: '', other: '', delivery: '', note: '' }),
+    ...typedCosts,
+  };
 
   const cards = entries.map((e) => {
     const g = e.group_id ? groups.get(e.group_id) : undefined;
@@ -109,7 +115,7 @@ export default function CompleteTripScreen() {
 
   // Returns the switch that lets a successful save leave without the discard prompt.
   const allowLeave = usePreventRemove(Object.keys(typed).length > 0 || Object.keys(extra).length > 0 || Object.keys(typedCosts).length > 0, ({ repeat }) =>
-    Alert.alert('Discard this trip?', undefined, [
+    Alert.alert(ordering ? 'Discard this order?' : 'Discard this trip?', undefined, [
       { text: 'Keep it', style: 'cancel' },
       { text: 'Discard', style: 'destructive', onPress: repeat },
     ])
@@ -131,12 +137,14 @@ export default function CompleteTripScreen() {
     const result = validateTrip(
       lines.map((l) => ({ key: l.key, entryId: l.entryId, itemId: l.itemId, quantity: l.quantity, price: l.price, soldByWeight: l.soldByWeight }))
     );
-    const tripCosts = isCity ? validateCosts(costs) : null;
+    const tripCosts = isCity || ordering ? validateCosts(costs) : null;
     setCostErrors(tripCosts && !tripCosts.ok ? tripCosts.errors : {});
     if (!result.ok) return setErrors(result.errors);
     if (tripCosts && !tripCosts.ok) return;
     return guard.run(async () => {
-      await completeTrip(storeId, purchaseDate(day, new Date()), result.values, tripCosts ? tripCosts.values : null);
+      const date = purchaseDate(day, new Date());
+      if (ordering && tripCosts) await placeOrder(storeId, date, result.values, tripCosts.values);
+      else await completeTrip(storeId, date, result.values, tripCosts ? tripCosts.values : null);
       allowLeave();
       router.back();
     });
@@ -148,7 +156,7 @@ export default function CompleteTripScreen() {
 
   return (
     <ScrollView style={{ backgroundColor: t.bg }} contentContainerStyle={{ padding: 16 }} keyboardShouldPersistTaps="handled">
-      <Stack.Screen options={{ title: 'Complete trip' }} />
+      <Stack.Screen options={{ title: ordering ? 'Place order' : 'Complete trip' }} />
       {section('Shop')}
       <StorePicker
         value={storeId}
@@ -162,13 +170,27 @@ export default function CompleteTripScreen() {
         <DayStepper value={day} onChange={setDay} now={now} />
       </View>
 
-      {isCity ? (
+      {ordering ? (
+        <>
+          {section('Delivery costs')}
+          <TripCostFields
+            kind="delivery"
+            form={costs}
+            onChange={(k, v) => {
+              setTypedCosts((c) => ({ ...c, [k]: v }));
+              setCostErrors(({ [k]: _, ...rest }) => rest);
+            }}
+            errors={costErrors}
+          />
+        </>
+      ) : isCity ? (
         <>
           {section('Trip costs')}
           <Text style={{ fontSize: font.caption, color: t.textSecondary, marginBottom: 8 }}>
             {dayTrip ? `Adds to ${dayLabel(day, now)}'s trip` : 'A city shop: this starts a trip'}
           </Text>
           <TripCostFields
+            kind="drive"
             form={costs}
             onChange={(k, v) => {
               setTypedCosts((c) => ({ ...c, [k]: v }));
@@ -179,7 +201,7 @@ export default function CompleteTripScreen() {
         </>
       ) : null}
 
-      {section('Bought')}
+      {section(ordering ? 'Ordered' : 'Bought')}
       {cards.length ? null : <Text style={{ color: t.textSecondary }}>Nothing ticked on the list.</Text>}
       {cards.map((c) => (
         <View
@@ -236,7 +258,11 @@ export default function CompleteTripScreen() {
       ))}
 
       <View style={{ flexDirection: 'row', paddingTop: 8, paddingBottom: 16 }}>
-        <PrimaryButton label={`Save ${lines.length} purchases`} onPress={onSave} disabled={!lines.length} />
+        <PrimaryButton
+          label={ordering ? `Place order (${lines.length} lines)` : `Save ${lines.length} purchases`}
+          onPress={onSave}
+          disabled={!lines.length}
+        />
       </View>
     </ScrollView>
   );
