@@ -11,6 +11,8 @@ const items = new Table({
   max_months_cover: column.real,
   est_monthly_usage: column.real,
   pack_size: column.real,
+  contents_qty: column.real, // how much one of it holds (groups spec 5.1)
+  contents_unit: column.text, // 'kg' | 'L' | a count word such as 'roll'
   sold_by_weight: column.integer,
   active: column.integer,
   created_at: column.text,
@@ -85,7 +87,46 @@ const categories = new Table({
   created_at: column.text,
 });
 
-export const AppSchema = new Schema({ items, stores, purchases, stock_counts, trips, settings, list_entries, categories });
+// "Who it's for" (groups spec 5.1); Home is built in, like the categories.
+const people = new Table({
+  name: column.text,
+  created_at: column.text,
+});
+
+// Interchangeable groups. Not `groups`: that clashes with the SQL keyword.
+const item_groups = new Table({
+  kind: column.text,
+  person: column.text,
+  base_unit: column.text,
+  buy_mode: column.text,
+  buffer_pct: column.integer,
+  max_months_cover: column.real,
+  est_monthly_usage: column.real,
+  active: column.integer,
+  created_at: column.text,
+});
+
+const item_group_members = new Table(
+  {
+    group_id: column.text,
+    item_id: column.text,
+  },
+  { indexes: { group: ['group_id'], item: ['item_id'] } }
+);
+
+export const AppSchema = new Schema({
+  items,
+  stores,
+  purchases,
+  stock_counts,
+  trips,
+  settings,
+  list_entries,
+  categories,
+  people,
+  item_groups,
+  item_group_members,
+});
 
 export type Database = (typeof AppSchema)['types'];
 export type ItemRecord = Database['items'];

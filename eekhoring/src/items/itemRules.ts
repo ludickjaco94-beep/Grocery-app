@@ -13,6 +13,8 @@ export type ItemForm = {
   maxMonthsCover: string;
   estMonthlyUsage: string;
   packSize: string;
+  contentsQty: string;
+  contentsUnit: string;
 };
 
 export type ItemValues = {
@@ -25,6 +27,8 @@ export type ItemValues = {
   max_months_cover: number;
   est_monthly_usage: number | null;
   pack_size: number | null;
+  contents_qty: number | null;
+  contents_unit: string | null;
 };
 
 export const emptyItemForm: ItemForm = {
@@ -37,6 +41,8 @@ export const emptyItemForm: ItemForm = {
   maxMonthsCover: '2',
   estMonthlyUsage: '',
   packSize: '',
+  contentsQty: '',
+  contentsUnit: '',
 };
 
 // Accepts "1,5" as well as "1.5": the phone keyboard may use a decimal comma.
@@ -68,6 +74,11 @@ export function validateItem(
   const pack = f.soldByWeight ? null : parseDecimal(f.packSize);
   if (pack === 'invalid' || (pack !== null && pack <= 0)) errors.packSize = 'Pack size must be blank or more than 0';
 
+  // What one of it holds, for fair prices per kg / L / roll (groups spec 5.1). Sold-by-measure items hold their own unit.
+  const contents = f.soldByWeight ? null : parseDecimal(f.contentsQty);
+  if (contents === 'invalid' || (contents !== null && contents <= 0)) errors.contentsQty = 'Holds must be blank or more than 0';
+  else if (contents !== null && !f.contentsUnit.trim()) errors.contentsUnit = 'Pick what it holds';
+
   if (Object.keys(errors).length) return { ok: false, errors };
   return {
     ok: true,
@@ -82,6 +93,8 @@ export function validateItem(
       max_months_cover: cap as number,
       est_monthly_usage: est as number | null,
       pack_size: pack as number | null,
+      contents_qty: contents as number | null,
+      contents_unit: contents === null ? null : f.contentsUnit.trim(),
     },
   };
 }
@@ -108,5 +121,7 @@ export function itemToForm(v: ItemValues): ItemForm {
     maxMonthsCover: str(v.max_months_cover),
     estMonthlyUsage: str(v.est_monthly_usage),
     packSize: str(v.pack_size),
+    contentsQty: str(v.contents_qty),
+    contentsUnit: v.contents_unit ?? '',
   };
 }

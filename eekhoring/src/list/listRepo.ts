@@ -36,6 +36,15 @@ export async function addToList(itemId: string, quantity: number, ticked: boolea
   });
 }
 
+// One entry per group, quantity in the group's base unit.
+export async function addGroupToList(groupId: string, quantity: number, ticked: boolean): Promise<void> {
+  await db.writeTransaction(async (tx) => {
+    const existing = await tx.getOptional('SELECT id FROM list_entries WHERE group_id = ?', [groupId]);
+    if (existing) return;
+    await tx.execute(INSERT, [randomUUID(), null, groupId, quantity, 1, ticked ? 1 : 0, ticked ? new Date().toISOString() : null]);
+  });
+}
+
 export async function setEntryQuantity(id: string, quantity: number): Promise<void> {
   await db.execute('UPDATE list_entries SET quantity = ? WHERE id = ?', [quantity, id]);
 }

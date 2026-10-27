@@ -14,6 +14,8 @@ const FIELDS = [
   'max_months_cover',
   'est_monthly_usage',
   'pack_size',
+  'contents_qty',
+  'contents_unit',
 ] as const;
 
 export async function createItem(v: ItemValues): Promise<string> {

@@ -52,7 +52,7 @@ test('findDuplicate is case-insensitive and trims', () => {
 test('itemToForm round-trips through validateItem', () => {
   const values = {
     name: 'Mince', unit: 'kg', category: 'Meat', buy_mode: 'monthly', sold_by_weight: 1,
-    buffer_pct: 15, max_months_cover: 2.5, est_monthly_usage: 4.2, pack_size: null,
+    buffer_pct: 15, max_months_cover: 2.5, est_monthly_usage: 4.2, pack_size: null, contents_qty: null, contents_unit: null,
   } as const;
   expect(validateItem(itemToForm(values))).toEqual({ ok: true, values });
 });
@@ -83,4 +83,31 @@ test('sold by measure turns each into kg', () => {
     ok: true,
     values: { unit: 'kg', sold_by_weight: 1 },
   });
+});
+
+test('contents round-trip through itemToForm', () => {
+  const r = validateItem({ ...emptyItemForm, name: 'Monster', contentsQty: '0,5', contentsUnit: 'L' });
+  expect(r).toMatchObject({ ok: true, values: { contents_qty: 0.5, contents_unit: 'L' } });
+  if (r.ok) expect(itemToForm(r.values)).toMatchObject({ contentsQty: '0.5', contentsUnit: 'L' });
+});
+
+test('contents need a unit and must be more than 0', () => {
+  expect(validateItem({ ...emptyItemForm, name: 'X', contentsQty: '2' })).toMatchObject({
+    ok: false,
+    errors: { contentsUnit: 'Pick what it holds' },
+  });
+  expect(validateItem({ ...emptyItemForm, name: 'X', contentsQty: '0', contentsUnit: 'L' })).toMatchObject({
+    ok: false,
+    errors: { contentsQty: 'Holds must be blank or more than 0' },
+  });
+  expect(validateItem({ ...emptyItemForm, name: 'X', contentsUnit: 'L' })).toMatchObject({
+    ok: true,
+    values: { contents_qty: null, contents_unit: null },
+  });
+});
+
+test('sold by measure drops contents', () => {
+  expect(
+    validateItem({ ...emptyItemForm, name: 'Mince', soldByWeight: true, unit: 'kg', contentsQty: '2', contentsUnit: 'roll' })
+  ).toMatchObject({ ok: true, values: { contents_qty: null, contents_unit: null } });
 });
