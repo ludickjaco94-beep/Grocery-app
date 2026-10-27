@@ -82,6 +82,8 @@ function ItemEditForm({
   const measure = form.unit === 'L' ? 'L' : 'kg';
   // "count" holds a word (roll, can…); kept as its own flag so clearing the word doesn't hide its input.
   const [counting, setCounting] = useState(!['', 'kg', 'L'].includes(initial.contentsUnit));
+  // Same idea for the item's own unit: a typed word such as roll.
+  const [wordUnit, setWordUnit] = useState(!UNITS.includes(initial.unit));
 
   const save = (values: ItemValues) =>
     guard.run(async () => {
@@ -192,9 +194,38 @@ function ItemEditForm({
               {label('Unit')}
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {UNITS.map((u) => (
-                  <Chip key={u} label={u} on={form.unit === u} onPress={() => set('unit', u)} />
+                  <Chip
+                    key={u}
+                    label={u}
+                    on={!wordUnit && form.unit === u}
+                    onPress={() => {
+                      setWordUnit(false);
+                      set('unit', u);
+                    }}
+                  />
                 ))}
+                <Chip
+                  label="+ word"
+                  on={wordUnit}
+                  onPress={() => {
+                    setWordUnit(true);
+                    if (UNITS.includes(form.unit)) set('unit', '');
+                  }}
+                />
               </View>
+              {wordUnit ? (
+                <TextInput
+                  style={{ ...inputStyle, marginTop: 8 }}
+                  value={form.unit}
+                  onChangeText={(v) => set('unit', v)}
+                  placeholder="roll, can, sachet…"
+                  placeholderTextColor={t.textSecondary}
+                  accessibilityLabel="Unit word"
+                  autoFocus
+                />
+              ) : null}
+              {hint('Quantities and prices count in this unit, e.g. R4.17 per roll')}
+              {error(errors.unit)}
             </>
           )}
 

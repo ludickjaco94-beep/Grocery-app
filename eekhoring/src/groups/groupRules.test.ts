@@ -103,3 +103,7 @@ test('groupNeed with no members suggests nothing', () => {
 test('holds matches count words ignoring case and spaces', () => {
   expect(holds({ sold_by_weight: 0, unit: 'pack', contents_qty: 18, contents_unit: 'Roll ' }, 'roll')).toBe(18);
 });
+
+test('an item counted in the group unit holds 1', () => {
+  expect(holds({ sold_by_weight: 0, unit: 'roll', contents_qty: null, contents_unit: null }, 'Roll')).toBe(1);
+});

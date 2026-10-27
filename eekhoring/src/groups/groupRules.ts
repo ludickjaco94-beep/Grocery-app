@@ -9,7 +9,8 @@ export type Measurable = { sold_by_weight: number; unit: string; contents_qty: n
 const same = (a: string | null, b: string) => a !== null && a.trim().toLowerCase() === b.trim().toLowerCase();
 
 export function holds(i: Measurable, base: string): number | null {
-  if (i.sold_by_weight && same(i.unit, base)) return 1;
+  // Counted in the group's own unit (kg, L or a word like roll): one of it is one base unit.
+  if (same(i.unit, base)) return 1;
   if (same(i.contents_unit, base) && i.contents_qty !== null && i.contents_qty > 0) return i.contents_qty;
   return null;
 }

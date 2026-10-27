@@ -1,4 +1,5 @@
-export type Unit = 'kg' | 'L' | 'pack' | 'each';
+// The four chips, or a word the owner types (roll, can, sachet): quantities are then counted in that word.
+export type Unit = 'kg' | 'L' | 'pack' | 'each' | (string & {});
 export type BuyMode = 'monthly' | 'as_needed';
 
 export const UNITS: Unit[] = ['kg', 'L', 'pack', 'each'];
@@ -58,6 +59,8 @@ export function validateItem(
   const errors: Partial<Record<keyof ItemForm, string>> = {};
   const name = f.name.trim();
   if (!name) errors.name = 'Give the item a name';
+  const word = f.unit.trim();
+  if (!f.soldByWeight && !word) errors.unit = 'Pick a unit';
 
   const buffer = parseDecimal(f.bufferPct);
   if (typeof buffer !== 'number' || !Number.isInteger(buffer) || buffer < 0 || buffer > 100)
@@ -85,7 +88,7 @@ export function validateItem(
     values: {
       name,
       // Sold by measure (spec 4.6): kg or L, priced per unit across pack sizes.
-      unit: f.soldByWeight ? (f.unit === 'L' ? 'L' : 'kg') : f.unit,
+      unit: f.soldByWeight ? (f.unit === 'L' ? 'L' : 'kg') : UNITS.includes(word) ? word : word.toLowerCase(),
       category: f.category.trim() || 'Other',
       buy_mode: f.buyMode,
       sold_by_weight: f.soldByWeight ? 1 : 0,

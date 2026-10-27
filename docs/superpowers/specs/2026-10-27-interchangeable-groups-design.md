@@ -81,6 +81,7 @@ list_entries (new column)
   - A sold-by-measure item whose unit equals the base unit holds 1. 1 kg of macaroni holds 1 kg, and the owner never types it.
   - Otherwise it's `contents_qty`, and `contents_unit` must equal the base unit.
   - An item can only join a group whose base unit it can be measured in. The item screen refuses, with a message, otherwise.
+- **Word units (owner, 2026-10-27, after the phone check):** an item's own unit can be a typed word, like "roll" or "can", stored lower-case. The owner logs toilet paper as rolls (48 at R190), so the price per roll is direct, whatever the pack size. Any item whose unit equals the group's base unit holds 1, the same as kg/L. Holds stays for items counted another way, such as a 553 ml can logged as "each" in a per-L group.
 - **All of an item's groups share one base unit**, because `contents` is per item. The shared energy drink is L in both drink groups.
 
 ### 5.2 Usage, stock and suggestion for a group

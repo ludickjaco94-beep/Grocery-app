@@ -111,3 +111,11 @@ test('sold by measure drops contents', () => {
     validateItem({ ...emptyItemForm, name: 'Mince', soldByWeight: true, unit: 'kg', contentsQty: '2', contentsUnit: 'roll' })
   ).toMatchObject({ ok: true, values: { contents_qty: null, contents_unit: null } });
 });
+
+test('a typed unit word is kept, trimmed and lower-cased', () => {
+  expect(validateItem({ ...emptyItemForm, name: 'Toilet paper', unit: ' Roll ' })).toMatchObject({ ok: true, values: { unit: 'roll' } });
+});
+
+test('a blank unit is refused', () => {
+  expect(validateItem({ ...emptyItemForm, name: 'X', unit: ' ' })).toMatchObject({ ok: false, errors: { unit: 'Pick a unit' } });
+});
