@@ -5,17 +5,15 @@ import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-nativ
 
 import { CUSTOM_CATEGORIES_SQL } from '@/categories/categoryRepo';
 import { orderedCategories, resolveCategory } from '@/categories/categoryRules';
-import { CategoryChips, Chip } from '@/components/CategoryChips';
+import { Chip } from '@/components/CategoryChips';
 import { DayStepper } from '@/components/DayStepper';
-import { SwitchRow } from '@/components/Field';
 import { ItemCard } from '@/components/ItemCard';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { findDuplicate } from '@/items/itemRules';
+import { StorePicker } from '@/components/StorePicker';
 import { createGuard } from '@/lib/guard';
 import { PurchaseForm } from '@/purchases/PurchaseForm';
 import { addPurchase } from '@/purchases/purchaseRepo';
 import { dayRange, emptyPurchaseForm, purchaseDate, formatMoney, unitPriceCents, validatePurchase, type PurchaseFormState } from '@/purchases/purchaseRules';
-import { addStore, STORES_SQL } from '@/stores/storeRepo';
 import { font, radius } from '@/theme/theme';
 import { useTheme } from '@/theme/useTheme';
 
@@ -27,9 +25,6 @@ export default function PurchasesScreen() {
   const [now] = useState(() => new Date());
   const [day, setDay] = useState(() => now.toISOString());
   const [pickedStore, setPickedStore] = useState<string | null>(null);
-  const [newStore, setNewStore] = useState<string | null>(null);
-  const [newStoreCity, setNewStoreCity] = useState(true);
-  const [newStoreError, setNewStoreError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [item, setItem] = useState<Item | null>(null);
   const [form, setForm] = useState<PurchaseFormState>(emptyPurchaseForm);
@@ -37,7 +32,6 @@ export default function PurchasesScreen() {
   const [storeError, setStoreError] = useState<string | null>(null);
   const [guard] = useState(() => createGuard((e) => Alert.alert('Could not save', e instanceof Error ? e.message : String(e))));
 
-  const stores = useQuery<{ id: string; name: string; is_city: number }>(STORES_SQL).data;
   const lastStore = useQuery<{ store_id: string }>('SELECT store_id FROM purchases ORDER BY date DESC LIMIT 1').data[0]?.store_id;
   const storeId = pickedStore ?? lastStore ?? null;
   const symbol = useQuery<{ currency_symbol: string | null }>('SELECT currency_symbol FROM settings LIMIT 1').data[0]?.currency_symbol ?? 'R';
@@ -65,19 +59,6 @@ export default function PurchasesScreen() {
     ])
   );
 
-  function onAddStore() {
-    const name = (newStore ?? '').trim();
-    if (!name) return setNewStoreError('Give the shop a name');
-    const dup = findDuplicate(name, stores);
-    if (dup) return setNewStoreError(`You already have ${dup.name}`);
-    return guard.run(async () => {
-      setPickedStore(await addStore(name, newStoreCity));
-      setNewStore(null);
-      setNewStoreError(null);
-      setStoreError(null);
-    });
-  }
-
   function onAdd() {
     if (!item) return;
     if (!storeId) return setStoreError('Pick a shop first');
@@ -102,49 +83,14 @@ export default function PurchasesScreen() {
       <Stack.Screen options={{ title: 'Log purchases' }} />
 
       {section('Shop')}
-      <CategoryChips
-        categories={stores}
-        selected={stores.find((s) => s.id === storeId)?.name ?? null}
-        onSelect={(name) => {
-          setPickedStore(stores.find((s) => s.name === name)?.id ?? null);
+      <StorePicker
+        value={storeId}
+        onChange={(id) => {
+          setPickedStore(id);
           setStoreError(null);
         }}
-        includeAll={false}
-        trailing={<Chip label="+ New shop" on={false} onPress={() => setNewStore('')} />}
+        error={storeError}
       />
-      {newStore !== null ? (
-        <View style={{ marginTop: 8 }}>
-          <TextInput
-            style={{
-              backgroundColor: t.surfaceRaised,
-              borderColor: t.border,
-              borderWidth: 1,
-              borderRadius: radius.button,
-              paddingHorizontal: 14,
-              minHeight: 48,
-              fontSize: font.body,
-              color: t.textPrimary,
-            }}
-            value={newStore}
-            onChangeText={(v) => {
-              setNewStore(v);
-              setNewStoreError(null);
-            }}
-            placeholder="Shop name"
-            placeholderTextColor={t.textSecondary}
-            accessibilityLabel="Shop name"
-            autoFocus
-          />
-          <SwitchRow label="City shop (where the monthly trip goes)" value={newStoreCity} onValueChange={setNewStoreCity} />
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <PrimaryButton label="Cancel" variant="outline" onPress={() => setNewStore(null)} />
-            <PrimaryButton label="Add shop" onPress={onAddStore} />
-          </View>
-        </View>
-      ) : null}
-      {newStoreError || storeError ? (
-        <Text style={{ fontSize: font.caption, color: t.danger, marginTop: 4 }}>{newStoreError ?? storeError}</Text>
-      ) : null}
       <View style={{ marginTop: 12 }}>
         <DayStepper value={day} onChange={setDay} now={now} />
       </View>
