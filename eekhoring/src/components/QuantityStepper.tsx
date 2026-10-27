@@ -11,6 +11,7 @@ export function QuantityStepper({
   onChangeText,
   label,
   invalid,
+  onBlur,
 }: {
   value: string;
   placeholder: string;
@@ -19,6 +20,7 @@ export function QuantityStepper({
   onChangeText: (text: string) => void;
   label: string;
   invalid?: boolean;
+  onBlur?: () => void;
 }) {
   const t = useTheme();
   const button = (sign: string, onPress: () => void, a11y: string) => (
@@ -58,6 +60,7 @@ export function QuantityStepper({
         placeholder={placeholder}
         placeholderTextColor={t.textSecondary}
         onChangeText={onChangeText}
+        onBlur={onBlur}
         keyboardType="decimal-pad"
         accessibilityLabel={`Count of ${label}`}
         style={{
