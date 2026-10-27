@@ -101,7 +101,13 @@ function TripDetail({ trip, data }: { trip: TripRow; data: ReturnType<typeof use
           {line('Gross saving', money(s.gross))}
           {line('Trip cost', money(s.breakEven))}
           {note(`This trip needs ${money(s.breakEven)} gross saving to cover its costs`)}
-          {s.specialGain ? note(`Specials saved ${money(s.specialGain)} (not counted in the saving)`) : null}
+          {s.specialGain ? (
+            <>
+              {line('Specials saved', money(s.specialGain))}
+              {line('Total with specials', money(s.withSpecials))}
+              {note('Specials come and go. The trip should pay for itself without them.')}
+            </>
+          ) : null}
           {s.cheaperLocally.length ? note(`Cheaper locally: ${names(s.cheaperLocally)}`) : null}
           {s.noLocal.length ? note(`No local price recorded: ${names(s.noLocal)}`) : null}
           {s.needsNormal.length ? note(`Needs a normal price: ${names(s.needsNormal)}`) : null}
@@ -135,7 +141,7 @@ function TripDetail({ trip, data }: { trip: TripRow; data: ReturnType<typeof use
             <ItemCard
               name={p.name}
               icon="cart-outline"
-              meta={`${p.quantity} ${p.unit} · ${formatMoney(Math.round(unitPriceCents(p.total_price_cents, p.quantity)), symbol)} per ${p.unit}${p.is_special ? ' · SPECIAL' : ''}`}
+              meta={`${p.quantity} ${p.unit} · ${formatMoney(Math.round(unitPriceCents(p.total_price_cents, p.quantity)), symbol)} per ${p.unit}${p.is_special ? ' · SPECIAL · may not last' : ''}`}
               right={<Text style={{ fontSize: 16, fontWeight: '600', color: t.textPrimary, fontVariant: ['tabular-nums'] }}>{formatMoney(p.total_price_cents, symbol)}</Text>}
             />
           </Pressable>

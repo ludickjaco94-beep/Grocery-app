@@ -48,7 +48,7 @@ test('tripSavings basic', () => {
 test('tripSavings uses the normal price for specials', () => {
   const special = p('oil', 'c', 1000, { is_special: 1, regular_price_cents: 1400 });
   const r = tripSavings([special], [special, p('oil', 'l1', 1500)], stores, 0);
-  expect(r).toMatchObject({ basketCity: 1400, basketLocal: 1500, gross: 100, specialGain: 400 });
+  expect(r).toMatchObject({ basketCity: 1400, basketLocal: 1500, gross: 100, specialGain: 400, withSpecials: 500 });
 });
 
 test('tripSavings excludes and lists items without a local price', () => {
@@ -82,7 +82,7 @@ test('monthSavings counts only the extra paid on emergencies', () => {
     [...all, ...month],
     stores
   );
-  expect(r).toEqual({ net: 800, penalty: 500, trueNet: 300, specialGain: 150 });
+  expect(r).toEqual({ net: 800, penalty: 500, trueNet: 300, specialGain: 150, withSpecials: 450 });
 });
 
 test('weightTotals sums kg per item and Meat', () => {

@@ -71,13 +71,16 @@ export function tripSavings(tripPurchases: P[], allPurchases: P[], stores: Store
   const basketCity = Math.round(city);
   const basketLocal = Math.round(local);
   const gross = basketLocal - basketCity;
+  const specialGain = Math.round(gain);
   return {
     basketCity,
     basketLocal,
     gross,
     net: gross - tripCostCents,
     breakEven: tripCostCents,
-    specialGain: Math.round(gain),
+    specialGain,
+    // Owner: specials are never the reason to go, but the total with them still matters.
+    withSpecials: gross - tripCostCents + specialGain,
     noLocal: uniq(noLocal),
     needsNormal: uniq(needsNormal),
     cheaperLocally: uniq(cheaperLocally),
@@ -95,7 +98,8 @@ export function monthSavings(trips: { net: number; specialGain: number }[], mont
   }
   const net = trips.reduce((s, t) => s + t.net, 0);
   const rounded = Math.round(penalty);
-  return { net, penalty: rounded, trueNet: net - rounded, specialGain: trips.reduce((s, t) => s + t.specialGain, 0) };
+  const specialGain = trips.reduce((s, t) => s + t.specialGain, 0);
+  return { net, penalty: rounded, trueNet: net - rounded, specialGain, withSpecials: net - rounded + specialGain };
 }
 
 // Spec 4.2: total kg (or L) per sold-by-measure item, plus all Meat combined in kg.

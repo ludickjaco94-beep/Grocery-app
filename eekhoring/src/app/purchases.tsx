@@ -157,7 +157,7 @@ export default function PurchasesScreen() {
               meta={[
                 `${p.quantity} ${p.unit}`,
                 `${formatMoney(Math.round(unitPriceCents(p.total_price_cents, p.quantity)), symbol)} per ${p.unit}`,
-                p.is_special ? 'SPECIAL' : null,
+                p.is_special ? 'SPECIAL · may not last' : null,
                 p.is_emergency ? 'EMERGENCY' : null,
               ]
                 .filter(Boolean)

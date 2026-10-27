@@ -38,6 +38,7 @@ export default function SavingsScreen() {
     };
   });
   const running = months.reduce((sum, m) => sum + m.total.trueNet, 0);
+  const runningWithSpecials = months.reduce((sum, m) => sum + m.total.withSpecials, 0);
 
   const caption = { fontSize: font.caption, color: t.textSecondary };
   const big = (cents: number) => ({ fontSize: 24, fontWeight: '600' as const, color: cents >= 0 ? t.positive : t.danger, fontVariant: ['tabular-nums' as const] });
@@ -47,7 +48,8 @@ export default function SavingsScreen() {
     <Screen>
       <ScrollView contentContainerStyle={{ paddingBottom: 16 }}>
         <Text style={{ ...caption, marginTop: 8 }}>Saved so far, after trip costs and emergencies</Text>
-        <Text style={{ ...big(running), marginBottom: 8 }}>{money(running)}</Text>
+        <Text style={{ ...big(running), marginBottom: runningWithSpecials === running ? 8 : 0 }}>{money(running)}</Text>
+        {runningWithSpecials === running ? null : <Text style={{ ...caption, marginBottom: 8 }}>With specials {money(runningWithSpecials)}</Text>}
         {months.length ? null : (
           <Text style={{ textAlign: 'center', color: t.textSecondary, marginTop: 32 }}>
             No city trips yet. Shop at a city shop and they&apos;ll show here.
@@ -79,7 +81,7 @@ export default function SavingsScreen() {
                   .filter(Boolean)
                   .join(' · ')}
               </Text>
-              {m.total.specialGain ? <Text style={caption}>Specials saved {money(m.total.specialGain)} (not counted)</Text> : null}
+              {m.total.specialGain ? <Text style={caption}>With specials {money(m.total.withSpecials)}</Text> : null}
             </View>
             {m.trips.map(({ trip, s }) => (
               <Link key={trip.id} href={`/trips/${trip.id}`} asChild>
