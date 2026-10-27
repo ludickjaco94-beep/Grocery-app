@@ -2,11 +2,19 @@ import type { Transaction } from '@powersync/react-native';
 import { randomUUID } from 'expo-crypto';
 
 import { db } from '@/db/db';
+import { ensureTrip } from '@/trips/tripRepo';
 
 import { applyStockDelta, stockDelta, type PurchaseValues } from './purchaseRules';
 
 type Dated = { date: string; quantity: number };
 type PurchaseInput = PurchaseValues & { store_id: string; date: string };
+type Row = PurchaseInput & { trip_id: string | null };
+
+// A city purchase belongs to that day's trip; a local one to none. Re-run on every edit, so moving shop or day moves it.
+async function withTrip(tx: Transaction, p: PurchaseInput): Promise<Row> {
+  const store = await tx.getOptional<{ is_city: number }>('SELECT is_city FROM stores WHERE id = ?', [p.store_id]);
+  return { ...p, trip_id: store?.is_city ? await ensureTrip(tx, p.date) : null };
+}
 
 const FIELDS = [
   'store_id',
@@ -18,6 +26,7 @@ const FIELDS = [
   'special_note',
   'is_emergency',
   'pack_count',
+  'trip_id',
 ] as const;
 
 // Every purchase write also moves stock, inside the same transaction, so the two never disagree.
@@ -41,9 +50,10 @@ async function moveStock(tx: Transaction, itemId: string, old: Dated | null, nex
 // For callers that write several purchases in one transaction (Complete trip).
 export async function insertPurchase(tx: Transaction, p: PurchaseInput & { item_id: string }): Promise<string> {
   const id = randomUUID();
+  const row = await withTrip(tx, p);
   await tx.execute(
     `INSERT INTO purchases (id, item_id, ${FIELDS.join(', ')}) VALUES (?, ?, ${FIELDS.map(() => '?').join(', ')})`,
-    [id, p.item_id, ...FIELDS.map((f) => p[f])]
+    [id, p.item_id, ...FIELDS.map((f) => row[f])]
   );
   await moveStock(tx, p.item_id, null, p, 'purchase');
   return id;
@@ -61,8 +71,9 @@ export async function addPurchase(p: PurchaseInput & { item_id: string }): Promi
 export async function updatePurchase(id: string, p: PurchaseInput): Promise<void> {
   await db.writeTransaction(async (tx) => {
     const old = await tx.get<Dated & { item_id: string }>('SELECT item_id, date, quantity FROM purchases WHERE id = ?', [id]);
+    const row = await withTrip(tx, p);
     await tx.execute(`UPDATE purchases SET ${FIELDS.map((f) => `${f} = ?`).join(', ')} WHERE id = ?`, [
-      ...FIELDS.map((f) => p[f]),
+      ...FIELDS.map((f) => row[f]),
       id,
     ]);
     await moveStock(tx, old.item_id, old, p, 'adjustment');
