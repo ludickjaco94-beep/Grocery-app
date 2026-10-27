@@ -4,7 +4,7 @@ import { db } from '@/db/db';
 import { insertPurchase } from '@/purchases/purchaseRepo';
 import type { PurchaseValues } from '@/purchases/purchaseRules';
 
-import { planList, type Entry } from './listRules';
+import { planList, type Entry, type Suggestion } from './listRules';
 
 // Unit price in cents per item: the latest non-special city purchase, else the latest non-special anywhere.
 export const LAST_PRICE_SQL = `SELECT i.id AS item_id, COALESCE(
@@ -14,13 +14,14 @@ export const LAST_PRICE_SQL = `SELECT i.id AS item_id, COALESCE(
      WHERE p.item_id = i.id AND p.is_special = 0 ORDER BY p.date DESC LIMIT 1)
   ) AS unit_cents FROM items i`;
 
-const INSERT = 'INSERT INTO list_entries (id, item_id, quantity, added_manually, ticked, ticked_at, ticked_by) VALUES (?, ?, ?, ?, ?, ?, NULL)';
+const INSERT =
+  'INSERT INTO list_entries (id, item_id, group_id, quantity, added_manually, ticked, ticked_at, ticked_by) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)';
 
-export async function makeList(suggestions: { item_id: string; quantity: number }[]): Promise<void> {
+export async function makeList(suggestions: Suggestion[]): Promise<void> {
   await db.writeTransaction(async (tx) => {
-    const entries = await tx.getAll<Entry>('SELECT id, item_id, quantity, added_manually, ticked FROM list_entries');
+    const entries = await tx.getAll<Entry>('SELECT id, item_id, group_id, quantity, added_manually, ticked FROM list_entries');
     const plan = planList(suggestions, entries);
-    for (const s of plan.insert) await tx.execute(INSERT, [randomUUID(), s.item_id, s.quantity, 0, 0, null]);
+    for (const s of plan.insert) await tx.execute(INSERT, [randomUUID(), s.item_id, s.group_id, s.quantity, 0, 0, null]);
     for (const u of plan.update) await tx.execute('UPDATE list_entries SET quantity = ? WHERE id = ?', [u.quantity, u.id]);
     for (const id of plan.remove) await tx.execute('DELETE FROM list_entries WHERE id = ?', [id]);
   });
@@ -31,7 +32,7 @@ export async function addToList(itemId: string, quantity: number, ticked: boolea
   await db.writeTransaction(async (tx) => {
     const existing = await tx.getOptional('SELECT id FROM list_entries WHERE item_id = ?', [itemId]);
     if (existing) return;
-    await tx.execute(INSERT, [randomUUID(), itemId, quantity, 1, ticked ? 1 : 0, ticked ? new Date().toISOString() : null]);
+    await tx.execute(INSERT, [randomUUID(), itemId, null, quantity, 1, ticked ? 1 : 0, ticked ? new Date().toISOString() : null]);
   });
 }
 

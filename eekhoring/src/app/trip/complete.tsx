@@ -68,15 +68,21 @@ export default function CompleteTripScreen() {
   function onSave() {
     if (!storeId) return setStoreError('Pick a shop first');
     const result = validateTrip(
-      rows.map((r) => ({ entryId: r.entry.id, quantity: r.quantity, price: r.price, soldByWeight: r.entry.sold_by_weight === 1 }))
+      rows.map((r) => ({
+        key: r.entry.id,
+        entryId: r.entry.id,
+        itemId: r.entry.item_id,
+        quantity: r.quantity,
+        price: r.price,
+        soldByWeight: r.entry.sold_by_weight === 1,
+      }))
     );
     if (!result.ok) return setErrors(result.errors);
-    const itemOf = new Map(entries.map((e) => [e.id, e.item_id]));
     return guard.run(async () => {
       await completeTrip(
         storeId,
         purchaseDate(day, new Date()),
-        result.values.map((v) => ({ ...v, item_id: itemOf.get(v.entryId) as string }))
+        result.values
       );
       allowLeave();
       router.back();

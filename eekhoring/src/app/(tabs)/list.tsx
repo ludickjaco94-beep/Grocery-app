@@ -66,7 +66,7 @@ export default function ListScreen() {
   function onMake() {
     const suggestions = [...usage.entries()]
       .filter(([, u]) => u.toBuy !== null && u.toBuy > 0)
-      .map(([item_id, u]) => ({ item_id, quantity: u.toBuy as number }));
+      .map(([item_id, u]) => ({ item_id, group_id: null, quantity: u.toBuy as number }));
     const run = () => guard.run(() => makeList(suggestions));
     if (!entries.length) return run();
     Alert.alert('Refresh suggestions?', 'Ticked and hand-added items stay.', [

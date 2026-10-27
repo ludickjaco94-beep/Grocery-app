@@ -69,6 +69,7 @@ const settings = new Table({
 const list_entries = new Table(
   {
     item_id: column.text,
+    group_id: column.text, // set for a group entry (groups spec 5.1); item_id is then null
     quantity: column.real,
     added_manually: column.integer,
     ticked: column.integer,
