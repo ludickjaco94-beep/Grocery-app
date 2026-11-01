@@ -26,12 +26,13 @@ export default function PricesScreen() {
     'SELECT name, unit, sold_by_weight, contents_qty, contents_unit FROM items WHERE id = ?',
     [id]
   ).data[0];
-  const rows = useQuery<Row>(
+  const purchases = useQuery<Row>(
     `SELECT p.id, p.store_id, s.name AS store, s.is_city, p.date, p.quantity, p.total_price_cents, p.is_special,
             p.regular_price_cents, p.is_emergency
      FROM purchases p JOIN stores s ON s.id = p.store_id WHERE p.item_id = ? ORDER BY p.date DESC`,
     [id]
-  ).data;
+  );
+  const rows = purchases.data;
   const symbol = useQuery<{ currency_symbol: string | null }>('SELECT currency_symbol FROM settings LIMIT 1').data[0]?.currency_symbol ?? 'R';
 
   const per = item?.unit ?? '';
@@ -111,7 +112,7 @@ export default function PricesScreen() {
           </View>
         );
       })}
-      {rows.length === 0 ? (
+      {rows.length === 0 && !purchases.isLoading ? (
         <Text style={{ textAlign: 'center', color: t.textSecondary, marginTop: 32 }}>No purchases yet. Log one from the Stock screen.</Text>
       ) : null}
     </ScrollView>

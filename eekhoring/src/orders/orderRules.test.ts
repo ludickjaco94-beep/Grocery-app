@@ -1,4 +1,4 @@
-import { lineState, onWayBy, partPrice, refundCents, validateDelivery, withOnWay } from './orderRules';
+import { lineState, maxDeliveredEdit, onWayBy, partPrice, refundCents, validateDelivery, withOnWay } from './orderRules';
 
 const l = (quantity: number, delivered: number, cancelled_qty: number) => lineState({ quantity, delivered, cancelled_qty });
 
@@ -40,3 +40,8 @@ test('withOnWay', () => {
 test('onWayBy rounds float noise', () => {
   expect(onWayBy([{ item_id: 'mince', on_way: 0.3 - 0.1 }]).get('mince')).toBe(0.2);
 });
+
+test('maxDeliveredEdit allows up to what was ordered', () => expect(maxDeliveredEdit({ quantity: 6, delivered: 4, cancelled_qty: 0 }, 4)).toBe(6));
+test('maxDeliveredEdit leaves out what was cancelled', () => expect(maxDeliveredEdit({ quantity: 6, delivered: 4, cancelled_qty: 2 }, 4)).toBe(4));
+test('maxDeliveredEdit counts other deliveries', () => expect(maxDeliveredEdit({ quantity: 6, delivered: 5, cancelled_qty: 0 }, 2)).toBe(3));
+test('maxDeliveredEdit handles float noise', () => expect(maxDeliveredEdit({ quantity: 1.5, delivered: 0.7 + 0.8, cancelled_qty: 0 }, 0.8)).toBe(0.8));

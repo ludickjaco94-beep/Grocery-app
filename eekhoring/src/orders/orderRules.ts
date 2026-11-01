@@ -31,6 +31,10 @@ export function validateDelivery(
   return { ok: true, quantity: q };
 }
 
+// The most a delivered purchase can be edited up to: what was ordered, less what was cancelled and other deliveries.
+export const maxDeliveredEdit = (l: { quantity: number; delivered: number; cancelled_qty: number }, currentQty: number) =>
+  roundQty(l.quantity - l.cancelled_qty - (l.delivered - currentQty));
+
 // Stock that counts for suggestions: what's here plus what's on the way.
 export const withOnWay = (stock: number | null, onWay: number) => (onWay ? (stock ?? 0) + onWay : stock);
 

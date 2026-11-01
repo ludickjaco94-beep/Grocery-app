@@ -10,7 +10,11 @@ export function parseMoney(s: string): number | null | 'invalid' {
   return Math.round(n * 100);
 }
 
-export const formatMoney = (cents: number, symbol: string) => `${symbol}${(cents / 100).toFixed(2)}`;
+export function formatMoney(cents: number, symbol: string): string {
+  const [whole, part] = (Math.abs(cents) / 100).toFixed(2).split('.');
+  // A non-breaking space, so an amount never wraps across two lines.
+  return `${cents < 0 ? '-' : ''}${symbol}${whole.replace(/\B(?=(\d{3})+$)/g, '\u00A0')}.${part}`;
+}
 
 export type PurchaseFormState = {
   quantity: string;

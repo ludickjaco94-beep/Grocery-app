@@ -17,8 +17,14 @@ import { useTheme } from '@/theme/useTheme';
 export default function OrderLineScreen() {
   const t = useTheme();
   const { lineId } = useLocalSearchParams<{ lineId: string }>();
-  const line = useQuery<OrderLine>(ORDER_LINE_SQL, [lineId]).data[0];
-  if (!line) return <Text style={{ flex: 1, padding: 16, color: t.textSecondary, backgroundColor: t.bg }}>Loading…</Text>;
+  const query = useQuery<OrderLine>(ORDER_LINE_SQL, [lineId]);
+  const line = query.data[0];
+  if (!line)
+    return (
+      <Text style={{ flex: 1, padding: 16, color: t.textSecondary, backgroundColor: t.bg }}>
+        {query.isLoading ? 'Loading…' : 'This order line no longer exists'}
+      </Text>
+    );
   return <Deliver line={line} />;
 }
 

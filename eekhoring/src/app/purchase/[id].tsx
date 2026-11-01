@@ -1,5 +1,5 @@
 import { useQuery } from '@powersync/react-native';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams, usePreventRemove } from 'expo-router';
 import { useState } from 'react';
 import { Alert, ScrollView, Text, View } from 'react-native';
 
@@ -7,6 +7,8 @@ import { CategoryChips } from '@/components/CategoryChips';
 import { DayStepper } from '@/components/DayStepper';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { createGuard } from '@/lib/guard';
+import { ORDER_LINE_SQL, type OrderLine } from '@/orders/orderRepo';
+import { maxDeliveredEdit } from '@/orders/orderRules';
 import { PurchaseForm } from '@/purchases/PurchaseForm';
 import { deletePurchase, updatePurchase } from '@/purchases/purchaseRepo';
 import { purchaseDate, purchaseToForm, validatePurchase, type PurchaseFormState, type PurchaseValues } from '@/purchases/purchaseRules';
@@ -14,14 +16,14 @@ import { STORES_SQL } from '@/stores/storeRepo';
 import { font } from '@/theme/theme';
 import { useTheme } from '@/theme/useTheme';
 
-type Row = PurchaseValues & { id: string; store_id: string; date: string; name: string; unit: string; sold_by_weight: number };
+type Row = PurchaseValues & { id: string; store_id: string; date: string; name: string; unit: string; sold_by_weight: number; order_line_id: string | null };
 
 export default function PurchaseEditScreen() {
   const t = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const purchase = useQuery<Row>(
     `SELECT p.id, p.store_id, p.date, p.quantity, p.total_price_cents, p.is_special, p.regular_price_cents, p.special_note,
-            p.is_emergency, p.pack_count, i.name, i.unit, i.sold_by_weight
+            p.is_emergency, p.pack_count, p.order_line_id, i.name, i.unit, i.sold_by_weight
      FROM purchases p JOIN items i ON i.id = p.item_id WHERE p.id = ?`,
     [id]
   );
@@ -39,18 +41,33 @@ function PurchaseEdit({ row }: { row: Row }) {
   const [now] = useState(() => new Date());
   const [storeId, setStoreId] = useState(row.store_id);
   const [day, setDay] = useState(row.date);
-  const [form, setForm] = useState<PurchaseFormState>(() => purchaseToForm(row));
+  const [initial] = useState(() => purchaseToForm(row));
+  const [form, setForm] = useState<PurchaseFormState>(initial);
   const [errors, setErrors] = useState<Partial<Record<keyof PurchaseFormState, string>>>({});
   const [guard] = useState(() => createGuard((e) => Alert.alert('Could not save', e instanceof Error ? e.message : String(e))));
   const stores = useQuery<{ id: string; name: string }>(STORES_SQL).data;
   const symbol = useQuery<{ currency_symbol: string | null }>('SELECT currency_symbol FROM settings LIMIT 1').data[0]?.currency_symbol ?? 'R';
+  const line = useQuery<OrderLine>(ORDER_LINE_SQL, [row.order_line_id ?? '']).data[0];
+  const dirty = storeId !== row.store_id || day !== row.date || JSON.stringify(form) !== JSON.stringify(initial);
+
+  const allowLeave = usePreventRemove(dirty, ({ repeat }) =>
+    Alert.alert('Discard your changes?', undefined, [
+      { text: 'Keep editing', style: 'cancel' },
+      { text: 'Discard', style: 'destructive', onPress: repeat },
+    ])
+  );
 
   function onSave() {
     const result = validatePurchase(form, row.sold_by_weight === 1);
     if (!result.ok) return setErrors(result.errors);
+    if (line) {
+      const max = maxDeliveredEdit(line, row.quantity);
+      if (result.values.quantity > max) return setErrors({ quantity: `Only ${max} of this order can be delivered` });
+    }
     setErrors({});
     return guard.run(async () => {
       await updatePurchase(row.id, { ...result.values, store_id: storeId, date: day === row.date ? row.date : purchaseDate(day, new Date()) });
+      allowLeave();
       router.back();
     });
   }
@@ -64,6 +81,7 @@ function PurchaseEdit({ row }: { row: Row }) {
         onPress: () =>
           guard.run(async () => {
             await deletePurchase(row.id);
+            allowLeave();
             router.back();
           }),
       },
@@ -73,15 +91,18 @@ function PurchaseEdit({ row }: { row: Row }) {
     <ScrollView style={{ backgroundColor: t.bg }} contentContainerStyle={{ padding: 16 }} keyboardShouldPersistTaps="handled">
       <Stack.Screen options={{ title: 'Edit purchase' }} />
       <Text style={{ fontSize: font.title, fontWeight: '700', color: t.textPrimary, marginBottom: 12 }}>{row.name}</Text>
-      <CategoryChips
-        categories={stores}
-        selected={stores.find((s) => s.id === storeId)?.name ?? null}
-        onSelect={(name) => {
-          const s = stores.find((x) => x.name === name);
-          if (s) setStoreId(s.id);
-        }}
-        includeAll={false}
-      />
+      {/* A delivery stays at the order's shop. */}
+      {row.order_line_id ? null : (
+        <CategoryChips
+          categories={stores}
+          selected={stores.find((s) => s.id === storeId)?.name ?? null}
+          onSelect={(name) => {
+            const s = stores.find((x) => x.name === name);
+            if (s) setStoreId(s.id);
+          }}
+          includeAll={false}
+        />
+      )}
       <View style={{ marginVertical: 12 }}>
         <DayStepper value={day} onChange={setDay} now={now} />
       </View>

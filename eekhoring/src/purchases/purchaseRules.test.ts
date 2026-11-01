@@ -1,6 +1,7 @@
 import {
   applyStockDelta,
   dayLabel,
+  formatMoney,
   dayRange,
   emptyPurchaseForm,
   normalPrice,
@@ -131,3 +132,7 @@ test('purchaseDate: today is the save time, an earlier day is its start so a sam
 test('normalPrice ignores emergency buys', () => {
   expect(normalPrice([{ ...p('2026-01-01', 1500) }, { ...p('2026-02-01', 2500), is_emergency: 1 }])).toBe(1500);
 });
+
+test('formatMoney groups thousands', () => expect(formatMoney(123456789, 'R')).toBe('R1\u00A0234\u00A0567.89'));
+test('formatMoney leaves small amounts', () => expect(formatMoney(99950, 'R')).toBe('R999.50'));
+test('formatMoney handles negatives', () => expect(formatMoney(-123456, 'R')).toBe('-R1\u00A0234.56'));
