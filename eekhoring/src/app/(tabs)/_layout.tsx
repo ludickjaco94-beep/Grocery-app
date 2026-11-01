@@ -38,6 +38,13 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="piggy-bank-outline" color={color as string} size={size} />,
         }}
       />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="cog-outline" color={color as string} size={size} />,
+        }}
+      />
     </Tabs>
   );
 }

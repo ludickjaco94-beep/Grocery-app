@@ -10,3 +10,7 @@ export async function addStore(name: string, isCity: boolean): Promise<string> {
   await db.execute('INSERT INTO stores (id, name, is_city) VALUES (?, ?, ?)', [id, name, isCity ? 1 : 0]);
   return id;
 }
+
+export async function updateStore(id: string, name: string, isCity: boolean): Promise<void> {
+  await db.execute('UPDATE stores SET name = ?, is_city = ? WHERE id = ?', [name, isCity ? 1 : 0, id]);
+}

@@ -84,6 +84,9 @@ const settings = new Table({
   usage_window_months: column.integer,
 });
 
+// One phone's preferences, never shared or backed up (phase 7 shares `settings`).
+const device_prefs = new Table({ theme_mode: column.text }, { localOnly: true });
+
 const list_entries = new Table(
   {
     item_id: column.text,
@@ -137,6 +140,7 @@ export const AppSchema = new Schema({
   stock_counts,
   trips,
   settings,
+  device_prefs,
   list_entries,
   categories,
   people,
