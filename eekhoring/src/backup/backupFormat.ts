@@ -7,6 +7,8 @@ const VERSION = 1;
 const END = 'end-of-backup';
 const NOT_BACKUP = "This isn't an Eekhoring backup file.";
 const DAMAGED = 'This backup file is damaged or incomplete, so nothing was restored.';
+const DATE_COLUMNS = ['date', 'created_at', 'ticked_at'];
+const DATE_FORM = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?Z?)?$/;
 const CHANGED = "This file was changed by another program, so it can't be restored safely. Use the file as the app shared it.";
 
 // null is an empty field and '' is "", so a restore gets back exactly what was saved.
@@ -95,9 +97,8 @@ export function decodeBackup(text: string, known: KnownTables): { ok: true; back
       backup[name] = current;
     } else {
       if (!current || record.length !== current.columns.length || !record[0]) return fail(DAMAGED);
-      const dateAt = current.columns.indexOf('date');
-      const date = dateAt < 0 ? null : record[dateAt];
-      if (date !== null && !/^\d{4}-\d{2}-\d{2}/.test(date)) return fail(CHANGED);
+      const { columns } = current;
+      if (record.some((v, c) => v !== null && DATE_COLUMNS.includes(columns[c]) && !DATE_FORM.test(v))) return fail(CHANGED);
       current.rows.push(record);
       rowCount++;
     }

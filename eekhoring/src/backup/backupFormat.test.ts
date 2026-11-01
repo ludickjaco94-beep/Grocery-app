@@ -47,3 +47,13 @@ test('decodeBackup accepts a table with fewer columns (a backup from an older ap
   expect(decodeBackup(encodeBackup({ items: { columns: ['id', 'name'], rows: [['1', 'Rice']] } }), known)).toMatchObject({ ok: true, rowCount: 1 }));
 test('canRestore ignores settings', () => expect(canRestore({ items: 0, stores: 0, settings: 1 })).toBe(true));
 test('canRestore refuses any other data', () => expect(canRestore({ items: 1, stores: 0, settings: 0 })).toBe(false));
+
+const dated = { items: ['id', 'date', 'created_at', 'ticked_at'] };
+const withDate = (column: string, value: string) =>
+  decodeBackup(encodeBackup({ items: { columns: ['id', column], rows: [['1', value]] } }), dated);
+test.each(['date', 'created_at', 'ticked_at'])('decodeBackup rejects a %s changed by a spreadsheet', (column) =>
+  expect(withDate(column, '01/11/2026')).toMatchObject({ ok: false, error: expect.stringContaining('another program') }));
+test.each(['date', 'created_at', 'ticked_at'])('decodeBackup rejects a %s with its time reformatted', (column) =>
+  expect(withDate(column, '2026-11-01 10:00')).toMatchObject({ ok: false, error: expect.stringContaining('another program') }));
+test.each(['2026-11-01', '2026-11-01T10:00:00.000Z', '2026-11-01T10:00:00Z'])('decodeBackup accepts the date form %s', (value) =>
+  expect(withDate('date', value)).toMatchObject({ ok: true }));

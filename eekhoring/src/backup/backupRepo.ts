@@ -33,7 +33,8 @@ export async function exportBackup(now: Date): Promise<void> {
   const d = String(now.getDate()).padStart(2, '0');
   const file = new File(Paths.cache, `eekhoring-backup-${y}-${m}-${d}.csv`);
   file.create({ overwrite: true });
-  file.write(text);
+  await file.write(text);
+  if ((await file.text()) !== text) throw new Error('The backup failed its own check, so it was not shared.');
   await Sharing.shareAsync(file.uri, { mimeType: 'text/csv' });
 }
 
