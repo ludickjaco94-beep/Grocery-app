@@ -21,7 +21,6 @@
       "package": "com.eekhoring.app"
     },
     "web": {
-      "output": "server",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
