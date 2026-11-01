@@ -1,7 +1,10 @@
 import { useQuery } from '@powersync/react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import { File } from 'expo-file-system';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 
+import { exportBackup, restoreBackup } from '@/backup/backupRepo';
 import { Chip } from '@/components/CategoryChips';
 import { Field, SwitchRow } from '@/components/Field';
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -155,6 +158,34 @@ function ShopsSection() {
   );
 }
 
+function BackupSection() {
+  const t = useTheme();
+  const [guard] = useState(() => createGuard((e) => Alert.alert('Backup problem', e instanceof Error ? e.message : String(e))));
+
+  function onRestore() {
+    return guard.run(async () => {
+      // Android doesn't label CSV files consistently, so the picker can't filter on type.
+      const picked = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
+      if (picked.canceled) return;
+      const result = await restoreBackup(await new File(picked.assets[0].uri).text());
+      if (result.ok) Alert.alert('Restored', `Restored ${result.rowCount} rows.`);
+      else Alert.alert('Not restored', result.error);
+    });
+  }
+
+  return (
+    <>
+      <Text style={{ fontSize: font.small, color: t.textSecondary, marginBottom: 12 }}>
+        Save this file somewhere off the phone, like Google Drive. Don&apos;t edit it in Excel.
+      </Text>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <PrimaryButton label="Share backup" onPress={() => guard.run(() => exportBackup(new Date()))} />
+        <PrimaryButton label="Restore from backup" variant="outline" onPress={onRestore} />
+      </View>
+    </>
+  );
+}
+
 export default function SettingsScreen() {
   const guard = useGuard();
   const settings = useQuery<SettingsRow>(SETTINGS_SQL);
@@ -174,6 +205,8 @@ export default function SettingsScreen() {
         </View>
         <Heading text="Shops" />
         <ShopsSection />
+        <Heading text="Backup" />
+        <BackupSection />
       </ScrollView>
     </Screen>
   );
